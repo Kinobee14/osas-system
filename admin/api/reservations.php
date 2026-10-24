@@ -18,6 +18,32 @@ $pdo = db();
 // the green post-event button shows up the moment an event is genuinely over.
 auto_complete_due_reservations($pdo);
 
+/** Take a reservation's borrowed items out of stock (called when it becomes approved). Throws if short. */
+function deduct_reservation_stock(PDO $pdo, int $reservationId): void {
+    $items = $pdo->prepare('SELECT resource_id, resource_name, quantity FROM reservation_resources WHERE reservation_id = ? AND resource_id IS NOT NULL');
+    $items->execute([$reservationId]);
+    $lock   = $pdo->prepare('SELECT name, stock FROM resources WHERE id = ? FOR UPDATE');
+    $deduct = $pdo->prepare('UPDATE resources SET stock = stock - ? WHERE id = ? AND stock >= ?');
+    foreach ($items->fetchAll() as $it) {
+        $qty = (int)$it['quantity'];
+        $lock->execute([(int)$it['resource_id']]);
+        $row = $lock->fetch();
+        if (!$row) throw new RuntimeException('"' . $it['resource_name'] . '" no longer exists in the inventory.');
+        $deduct->execute([$qty, (int)$it['resource_id'], $qty]);
+        if ($deduct->rowCount() === 0) {
+            throw new RuntimeException('Not enough "' . $row['name'] . '" in stock (' . (int)$row['stock'] . ' left, ' . $qty . ' requested).');
+        }
+    }
+}
+
+/** Put a reservation's borrowed items back in stock (an approval was undone). */
+function restore_reservation_stock(PDO $pdo, int $reservationId): void {
+    $items = $pdo->prepare('SELECT resource_id, quantity FROM reservation_resources WHERE reservation_id = ? AND resource_id IS NOT NULL');
+    $items->execute([$reservationId]);
+    $restock = $pdo->prepare('UPDATE resources SET stock = stock + ? WHERE id = ?');
+    foreach ($items->fetchAll() as $it) $restock->execute([(int)$it['quantity'], (int)$it['resource_id']]);
+}
+
 /** Kept for the GET payload: approvals needed to approve (see shared/votes.php). */
 function votes_needed(PDO $pdo): int { return approvals_needed($pdo); }
 
@@ -142,6 +168,14 @@ if (method() === 'POST') {
         $needed  = approvals_needed($pdo);
         $newStatus = $approve >= $needed ? 'approved' : ($decline >= declines_needed($pdo) ? 'declined' : 'pending');
 
+        // Stock follows approval: give it back if an approval was withdrawn, take it if undo tipped it to approved.
+        if ($curStatus === 'approved' && $newStatus !== 'approved') {
+            restore_reservation_stock($pdo, (int)$id);
+        } elseif ($curStatus !== 'approved' && $newStatus === 'approved') {
+            try { deduct_reservation_stock($pdo, (int)$id); }
+            catch (RuntimeException $e) { $pdo->rollBack(); respond(false, null, 'Cannot approve: ' . $e->getMessage(), 409); }
+        }
+
         // Only touch the reservation when its status really changes (or a declined one lost a reason).
         if ($newStatus !== $curStatus || $newStatus === 'declined') {
             $pdo->prepare('UPDATE reservations SET status = ?, decline_reason = ? WHERE id = ?')
@@ -237,6 +271,15 @@ if (method() === 'POST') {
             $parts[] = $office . ': ' . ($row['reason'] ?: 'No reason given');
         }
         $declineReason = implode("\n", $parts);
+    }
+
+    if ($final === 'approved') {
+        // Approval is final: now (and only now) take the borrowed items out of stock.
+        try { deduct_reservation_stock($pdo, (int)$id); }
+        catch (RuntimeException $e) {
+            $pdo->rollBack();
+            respond(false, null, 'Cannot approve: ' . $e->getMessage() . ' Ask the student to lower the quantity, or restock first.', 409);
+        }
     }
 
     if ($final) {

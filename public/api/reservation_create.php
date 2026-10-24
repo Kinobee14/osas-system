@@ -301,14 +301,10 @@ try {
         $insertRes = $pdo->prepare(
             'INSERT INTO reservation_resources (reservation_id, resource_id, resource_name, quantity) VALUES (?, ?, ?, ?)'
         );
-        $deductStmt = $pdo->prepare('UPDATE resources SET stock = stock - ? WHERE id = ? AND stock >= ?');
+        // Stock is NOT deducted here. It is only taken out once the
+        // reservation is approved (admin/api/reservations.php).
         foreach ($resourcesToInsert as $r) {
             $insertRes->execute([$reservationId, $r['id'], $r['name'], $r['quantity']]);
-            $deductStmt->execute([$r['quantity'], $r['id'], $r['quantity']]);
-            if ($deductStmt->rowCount() === 0) {
-                // Someone else grabbed the remaining stock between our lock and here — bail out.
-                throw new RuntimeException("\"{$r['name']}\" is no longer available in the quantity you requested. Please try again.");
-            }
         }
     }
 

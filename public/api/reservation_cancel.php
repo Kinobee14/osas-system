@@ -57,12 +57,15 @@ try {
             ->execute([$res['id']]);
     }
 
-    // The borrowed items were never used — put them back in stock.
-    $items = $pdo->prepare('SELECT resource_id, quantity FROM reservation_resources WHERE reservation_id = ? AND resource_id IS NOT NULL');
-    $items->execute([$res['id']]);
-    $restock = $pdo->prepare('UPDATE resources SET stock = stock + ? WHERE id = ?');
-    foreach ($items->fetchAll() as $it) {
-        $restock->execute([(int) $it['quantity'], (int) $it['resource_id']]);
+    // Stock is only deducted once a reservation is approved, so give the
+    // items back only if this one had already been approved.
+    if ($res['status'] === 'approved') {
+        $items = $pdo->prepare('SELECT resource_id, quantity FROM reservation_resources WHERE reservation_id = ? AND resource_id IS NOT NULL');
+        $items->execute([$res['id']]);
+        $restock = $pdo->prepare('UPDATE resources SET stock = stock + ? WHERE id = ?');
+        foreach ($items->fetchAll() as $it) {
+            $restock->execute([(int) $it['quantity'], (int) $it['resource_id']]);
+        }
     }
 
     notify_student($pdo, $userId, "Your reservation \"{$res['event_name']}\" ({$res['ref_no']}) has been cancelled. It stays in your Past Events history.");

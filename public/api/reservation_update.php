@@ -9,8 +9,8 @@
  *  - Pictures are OPTIONAL here: the pictures already on file are kept.
  *    A new picture uploaded for a checklist item replaces the old picture
  *    with the same label; new labels are simply added.
- *  - Borrowed resources are re-checked: the old quantities go back to stock
- *    first, then the new ones are taken out again.
+ *  - Borrowed resources are re-checked against current stock, but nothing is
+ *    deducted: stock is only taken out when the reservation is approved.
  *  - Saving sends the request back to OSAS: status becomes 'pending', the
  *    old decline reason and admin votes are cleared, so it is reviewed fresh.
  */
@@ -164,18 +164,11 @@ try {
     $conflicts = sched_find_conflicts($pdo, $venueId, $venueName, $date, $start, $end, (int) $resId);
     if ($conflicts) throw new SchedConflictException($conflicts);
 
-    // --- Resources: give the old quantities back, then take the new ones. ---
-    $old = $pdo->prepare('SELECT resource_id, quantity FROM reservation_resources WHERE reservation_id = ?');
-    $old->execute([$resId]);
-    $giveBack = $pdo->prepare('UPDATE resources SET stock = stock + ? WHERE id = ?');
-    foreach ($old->fetchAll() as $o) {
-        if ($o['resource_id']) $giveBack->execute([(int) $o['quantity'], (int) $o['resource_id']]);
-    }
+    // --- Resources: pending/declined reservations hold no stock, so just replace the list. ---
     $pdo->prepare('DELETE FROM reservation_resources WHERE reservation_id = ?')->execute([$resId]);
 
     $insertRes = $pdo->prepare('INSERT INTO reservation_resources (reservation_id, resource_id, resource_name, quantity) VALUES (?, ?, ?, ?)');
     $lockRes   = $pdo->prepare('SELECT id, name, stock FROM resources WHERE id = ? FOR UPDATE');
-    $deduct    = $pdo->prepare('UPDATE resources SET stock = stock - ? WHERE id = ? AND stock >= ?');
     foreach ($resourcesInput as $item) {
         $rid = filter_var($item['id'] ?? null, FILTER_VALIDATE_INT);
         $qty = filter_var($item['quantity'] ?? null, FILTER_VALIDATE_INT);
@@ -187,8 +180,6 @@ try {
             throw new RuntimeException("Only {$resource['stock']} \"{$resource['name']}\" left in stock — please lower the quantity and try again.");
         }
         $insertRes->execute([$resId, (int) $resource['id'], $resource['name'], $qty]);
-        $deduct->execute([$qty, (int) $resource['id'], $qty]);
-        if ($deduct->rowCount() === 0) throw new RuntimeException("\"{$resource['name']}\" is no longer available in that quantity.");
     }
 
     // --- Pictures: a new picture replaces the old one with the same label. ---
