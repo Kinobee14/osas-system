@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPARK Admin · Sign In</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&family=Cormorant+Garamond:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{--g900:#0b3d24;--g800:#0f5132;--g700:#13693f;--g500:#2fb565;--cream:#f4efdf;--line:#e2ddcc;--ink:#173a2a;--muted:#5d6b62}
+*{box-sizing:border-box;margin:0;padding:0}
+body{min-height:100vh;background:var(--cream);color:var(--ink);font-family:'Lexend','Segoe UI',Arial,sans-serif}
+.split{display:grid;grid-template-columns:50% 50%;min-height:100vh}
+
+/* ---------- left hero ---------- */
+.hero{position:relative;overflow:hidden;color:#fff;padding:48px 56px 40px;display:flex;flex-direction:column;background:var(--g900)}
+.hero>*{position:relative;z-index:2}
+.hero>.bg{position:absolute;inset:0;z-index:0;overflow:hidden}
+.bg::before{content:"";position:absolute;inset:0;background:url("../public/pictures/UCC%20building.jpg") center/cover no-repeat;animation:kb 28s ease-in-out infinite alternate}
+.bg::after{content:"";position:absolute;inset:0;background:linear-gradient(160deg,rgba(4,52,28,.95) 0%,rgba(8,92,50,.84) 55%,rgba(8,92,50,.66) 100%)}
+@keyframes kb{from{transform:scale(1)}to{transform:scale(1.12) translate(-1.5%,-1%)}}
+.hero>.shape{position:absolute;z-index:1;border-radius:48px;pointer-events:none}
+.s1{width:520px;height:200px;left:-210px;bottom:20px;transform:rotate(-38deg);background:linear-gradient(90deg,rgba(47,181,101,.55),transparent)}
+.s2{width:520px;height:80px;left:-240px;bottom:140px;transform:rotate(-38deg);background:linear-gradient(90deg,rgba(126,226,160,.28),transparent)}
+.s3{width:260px;height:260px;left:-100px;top:-130px;transform:rotate(45deg);background:linear-gradient(135deg,rgba(47,181,101,.5),transparent 70%)}
+.s4{width:380px;height:150px;right:-160px;bottom:-30px;transform:rotate(-38deg);background:linear-gradient(270deg,rgba(47,181,101,.55),transparent)}
+.lockup{display:flex;align-items:center;gap:16px}
+.lockup img{width:96px;height:auto;filter:drop-shadow(0 6px 18px rgba(0,0,0,.35))}
+.lockup b{display:block;font-size:54px;line-height:1;font-weight:700;letter-spacing:1px}
+.lockup span{display:block;font-size:14px;line-height:1.35;margin-top:6px;opacity:.95}
+.mid{margin:auto 0;padding:24px 0}
+.eyebrow{display:flex;align-items:center;gap:14px;font-size:13px;font-weight:600;letter-spacing:5px;text-transform:uppercase}
+.eyebrow svg{width:34px;height:34px;stroke:#fff;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.welcome{font-family:'Cormorant Garamond',serif;font-size:70px;line-height:1;font-weight:700;margin-top:22px}
+.lead{font-size:16px;line-height:1.75;margin-top:22px;max-width:440px;opacity:.95}
+.features{display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:0}
+.feat{display:flex;align-items:center;gap:12px;padding:0 18px;border-left:1px solid rgba(255,255,255,.28)}
+.feat:first-child{border-left:0;padding-left:0}
+.feat i{flex-shrink:0;width:46px;height:46px;border-radius:50%;background:#1f9d58;display:grid;place-items:center}
+.feat svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.feat b{display:block;font-size:13.5px;font-weight:600}
+.feat span{display:block;font-size:11px;opacity:.85;line-height:1.4;margin-top:2px}
+
+/* ---------- right panel ---------- */
+.panel{position:relative;overflow:hidden;background:var(--cream);display:flex;flex-direction:column;align-items:center;padding:36px clamp(28px,6vw,80px) 20px}
+.panel::before{content:"";position:absolute;top:-170px;right:-170px;width:280px;height:280px;border-radius:48px;transform:rotate(45deg);pointer-events:none;
+ background:linear-gradient(135deg,var(--g800),#138a52);box-shadow:-26px 26px 0 -6px rgba(47,181,101,.28),-52px 52px 0 -12px rgba(47,181,101,.14)}
+.panel::after{content:"";position:absolute;bottom:-150px;left:-150px;width:240px;height:240px;border-radius:44px;transform:rotate(45deg);pointer-events:none;
+ background:linear-gradient(315deg,var(--g800),#138a52);box-shadow:26px -26px 0 -6px rgba(47,181,101,.25)}
+.panel>*{position:relative;z-index:1}
+.top{display:flex;align-items:center;gap:20px;width:100%;max-width:640px}
+.top img{width:88px;height:auto}
+.top b{font-size:52px;line-height:1;font-weight:700;color:var(--g800);letter-spacing:1px}
+.top span{border-left:2px solid var(--g800);padding-left:18px;font-size:14.5px;line-height:1.45;color:var(--g800)}
+.wrap{width:100%;max-width:640px;margin:auto 0;padding:20px 0}
+.badge{display:inline-flex;align-items:center;gap:10px}
+.badge svg{width:30px;height:30px;stroke:var(--g800);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.badge em{font-style:normal;background:#e6efe1;color:var(--g800);font-size:12px;font-weight:600;letter-spacing:3px;text-transform:uppercase;padding:7px 14px;border-radius:6px}
+h1{font-family:'Cormorant Garamond',serif;font-size:42px;line-height:1.1;color:var(--g900);margin-top:14px;font-weight:700}
+.sub{font-size:15px;color:var(--muted);margin:6px 0 24px}
+.field{margin-bottom:18px}
+.field label{display:block;font-size:12.5px;font-weight:600;letter-spacing:.4px;margin-bottom:8px;text-transform:uppercase}
+.input{display:flex;align-items:center;gap:12px;background:#fbfaf4;border:1px solid var(--line);border-radius:8px;padding:0 16px;height:52px;transition:.2s}
+.input:focus-within{border-color:var(--g700);box-shadow:0 0 0 3px rgba(19,105,63,.12)}
+.input>svg{width:20px;height:20px;stroke:var(--g800);fill:none;stroke-width:2;flex-shrink:0;stroke-linecap:round;stroke-linejoin:round}
+.input input{border:0;background:transparent;outline:0;flex:1;min-width:0;font:inherit;font-size:15px;color:var(--ink)}
+.eye{background:none;border:0;cursor:pointer;display:flex;padding:4px}
+.eye svg{width:20px;height:20px;stroke:var(--g800);fill:none;stroke-width:2}
+.err{background:#fdecec;color:#9b1c1c;border:1px solid #f5c2c2;border-radius:8px;padding:12px 14px;font-size:14px;margin-bottom:16px}
+.err[hidden]{display:none}
+.btn{width:100%;height:56px;border:0;border-radius:8px;cursor:pointer;color:#fff;font:600 16px 'Lexend',sans-serif;letter-spacing:.5px;text-transform:uppercase;margin-top:6px;
+ background:linear-gradient(90deg,var(--g800),#138a52);box-shadow:0 8px 20px -8px rgba(15,81,50,.6);transition:.2s}
+.btn:hover{filter:brightness(1.1);transform:translateY(-1px)}
+.btn:disabled{opacity:.6;cursor:wait;transform:none}
+.foot{width:100%;max-width:640px;text-align:right;font-size:11px;color:var(--muted);padding-top:12px}
+@media(prefers-reduced-motion:reduce){.bg::before{animation:none}}
+@media(max-width:1600px){.top{gap:16px}.top img{width:72px}.top b{font-size:44px}.top span{font-size:13.5px;padding-left:14px;flex:1;min-width:0}.welcome{font-size:60px}}
+@media(max-width:1250px){.hero{padding:40px 32px 32px}.welcome{font-size:50px}.features{grid-template-columns:1fr;gap:14px}.feat{border-left:0;padding:0}.lockup b{font-size:44px}.lockup img{width:76px}}
+@media(max-width:900px){.split{grid-template-columns:1fr}.hero{padding:26px 22px}.lead,.features{display:none}.welcome{font-size:38px;margin-top:14px}.mid{padding:18px 0 4px}.panel{padding:28px 22px 18px}}
+@media(max-width:480px){.top span{display:none}.top b{font-size:34px}.top img{width:56px}h1{font-size:34px}}
+</style>
+</head>
+<body>
+<div class="split">
+  <section class="hero">
+    <div class="bg" aria-hidden="true"></div>
+    <span class="shape s1"></span><span class="shape s2"></span><span class="shape s3"></span><span class="shape s4"></span>
+    <div class="lockup">
+      <img src="../public/pictures/spark_logo.png" alt="SPARK logo">
+      <div><b>SPARK</b><span>Student Programs and Activities<br>Resource Keeper Management System</span></div>
+    </div>
+    <div class="mid">
+      <div class="eyebrow"><svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.5 9.5 8 11 4.5-1.5 8-6 8-11V5z"/><path d="m12 8 1.2 2.5 2.8.4-2 2 .5 2.8-2.5-1.3-2.5 1.3.5-2.8-2-2 2.8-.4z"/></svg>Administration Portal</div>
+      <h2 class="welcome">Welcome,<br>Administrator</h2>
+      <p class="lead">Access the secure administration portal to manage system settings, users, and institutional data.</p>
+    </div>
+    <div class="features">
+      <div class="feat"><i><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.4"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5M15.5 14.8c3 0 5.5 1.7 5.5 4.7"/></svg></i><div><b>Manage Users</b><span>Create, edit, and<br>manage accounts.</span></div></div>
+      <div class="feat"><i><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></i><div><b>System Settings</b><span>Configure and maintain<br>system preferences.</span></div></div>
+      <div class="feat"><i><svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.5 9.5 8 11 4.5-1.5 8-6 8-11V5z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg></i><div><b>Secure Access</b><span>Authorized personnel only.</span></div></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="top">
+      <img src="../public/pictures/spark_logo.png" alt="SPARK logo">
+      <b>SPARK</b>
+      <span>Student Programs and<br>Activities Resource Keeper<br>Management System</span>
+    </div>
+    <div class="wrap">
+      <div class="badge"><svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.5 9.5 8 11 4.5-1.5 8-6 8-11V5z"/><path d="m12 8 1.2 2.5 2.8.4-2 2 .5 2.8-2.5-1.3-2.5 1.3.5-2.8-2-2 2.8-.4z"/></svg><em>Admin Login</em></div>
+      <h1>Sign in to Administration Portal</h1>
+      <p class="sub">Enter your administrator credentials to continue.</p>
+
+      <form id="loginForm" novalidate>
+        <div class="field">
+          <label for="username">Username</label>
+          <div class="input"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+            <input id="username" name="username" autocomplete="username" placeholder="Enter your admin username" required autofocus></div>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <div class="input"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+            <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required>
+            <button type="button" class="eye" id="togglePassword" aria-label="Show password"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+        </div>
+        <p id="loginError" class="err" hidden></p>
+        <button class="btn" type="submit">Sign In &rarr;</button>
+      </form>
+    </div>
+    <div class="foot">&copy; 2026 University of Caloocan City. All rights reserved.</div>
+  </section>
+</div>
+
+<script src="assets/js/api.js"></script>
+<script>
+  const form = document.getElementById('loginForm');
+  const err = document.getElementById('loginError');
+  const toggleBtn = document.getElementById('togglePassword');
+  const pwdInput = document.getElementById('password');
+
+  // Toggle password visibility
+  toggleBtn.addEventListener('click', () => {
+    const isPassword = pwdInput.type === 'password';
+    pwdInput.type = isPassword ? 'text' : 'password';
+    toggleBtn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+  });
+
+  // Check existing session
+  if (typeof api !== 'undefined') {
+    api.get('auth.php?action=me', { silent: true })
+      .then(() => location.replace('index.html'))
+      .catch(() => {});
+  }
+
+  // Handle submit
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    err.hidden = true;
+    const btn = form.querySelector('button[type=submit]');
+    btn.disabled = true;
+
+    try {
+      if (typeof api === 'undefined') throw new Error('API client script failed to load.');
+      await api.post('auth.php?action=login', Object.fromEntries(new FormData(form)), { silent: true });
+      location.replace('index.html');
+    } catch (ex) {
+      err.textContent = ex.message || 'An error occurred during login.';
+      err.hidden = false;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

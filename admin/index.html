@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vice Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand__logo brand__logo--img"><img src="assets/img/logo.png" alt="SPARK logo" onerror="this.parentNode.textContent='V'"></div>
+        <div>
+          <div class="brand__name" id="brandName">SPARK</div>
+          <div class="brand__role" id="brandRole">Admin</div>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <div class="nav__group">
+          <a href="#dashboard" data-page="dashboard"><span class="ico">▦</span>Dashboard</a>
+          <a href="#accounts" data-page="accounts"><span class="ico">☺</span>Pending Account<span class="badge-count" id="accCount" hidden></span></a>
+          <a href="#approvals" data-page="approvals"><span class="ico">✓</span>Approval Queue<span class="badge-count" id="resCount" hidden></span></a>
+          <a href="#reschedules" data-page="reschedules"><span class="ico">↻</span>Reschedule Requests<span class="badge-count" id="rsCount" hidden></span></a>
+          <a href="#schedules" data-page="schedules"><span class="ico">▤</span>Schedules</a>
+        </div>
+        <div class="nav__group">
+          <a href="#reservations" data-page="reservations"><span class="ico">☰</span>All Reservation</a>
+          <a href="#venues" data-page="venues"><span class="ico">⌂</span>Venues</a>
+          <a href="#inventory" data-page="inventory"><span class="ico">▧</span>Inventory</a>
+          <a href="#users" data-page="users"><span class="ico">♟</span>Users</a>
+        </div>
+        <div class="nav__group">
+          <a href="#reports" data-page="reports"><span class="ico">▥</span>Reports</a>
+          <a href="#settings" data-page="settings"><span class="ico">⚙</span>Settings</a>
+          <a href="#" id="logoutBtn"><span class="ico">⎋</span>Log Out</a>
+        </div>
+      </nav>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <button class="menu-btn" id="menuBtn" aria-label="Toggle menu">☰</button>
+        <div>
+          <div class="topbar__date" id="today"></div>
+          <h1 class="topbar__title" id="pageTitle">Dashboard</h1>
+        </div>
+      </header>
+      <section class="content" id="app">
+        <div class="loading">Loading…</div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal" id="modal" hidden>
+    <div class="modal__box">
+      <h3 id="modalTitle"></h3>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <!-- Full-size viewer for requirement pictures and event photos -->
+  <div class="lightbox" id="lightbox" hidden>
+    <button class="lightbox__close" aria-label="Close">✕</button>
+    <img id="lightboxImg" alt="">
+    <p class="lightbox__caption" id="lightboxCaption"></p>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="assets/js/api.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
