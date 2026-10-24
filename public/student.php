@@ -249,7 +249,9 @@ $stmt = $pdo->prepare(
 $stmt->execute([$userId]);
 $notifRows = $stmt->fetchAll();
 $notificationsForJs = array_map(function ($n) {
-    return ['id' => (int)$n['id'], 'text' => $n['message'], 'time' => time_ago($n['created_at'])];
+    // created_at is stored in UTC (session clock); show the exact moment in campus time too.
+    $at = (new DateTime($n['created_at'], new DateTimeZone('UTC')))->setTimezone(new DateTimeZone(app_timezone()))->format('M j, Y g:i A');
+    return ['id' => (int)$n['id'], 'text' => $n['message'], 'time' => time_ago($n['created_at']), 'at' => $at];
 }, $notifRows);
 
 function time_ago(string $datetime): string {
@@ -431,6 +433,21 @@ a.file-pill{text-decoration:none;display:inline-flex;align-items:center;}
 .bell-list .notif-item{padding:11px 14px;}
 .bell-list .notif-item.unread{background:#fdf0ee;}
 .bell-list .empty-note{padding:18px 14px;margin:0;}
+.bell-menu{width:400px;}
+.bell-list .notif-item.nc{padding:12px 14px 12px 12px;border-left:4px solid var(--line);}
+.nc--ok{border-left-color:var(--confirmed)!important;}
+.nc--bad{border-left-color:#b23b2e!important;}
+.nc--warn{border-left-color:#c77d1a!important;}
+.nc--info{border-left-color:#8a9a92!important;}
+.nc-title{font-weight:700;font-size:.84rem;color:var(--green-dark);}
+.nc-time{font-size:.68rem;color:var(--ink-soft);margin:1px 0 6px;}
+.nc-text{font-size:.78rem;line-height:1.45;overflow-wrap:anywhere;}
+.nc-meta{font-size:.7rem;color:var(--ink-soft);margin-top:5px;}
+.nc-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:9px;}
+.nc-chips{display:flex;gap:5px;flex-wrap:wrap;}
+.nc-btn{border:1px solid var(--green-dark);background:var(--green-dark);color:#fff;font:inherit;font-size:.72rem;font-weight:700;padding:6px 13px;border-radius:7px;cursor:pointer;text-decoration:none;white-space:nowrap;}
+.nc-btn:hover{filter:brightness(1.12);}
+.stu-box .notif-item.nc{padding:12px 12px;}
 @media(max-width:768px){.bell-wrap{top:12px;right:14px;}}
 .week-item{padding:10px 0;border-bottom:1px solid var(--line);font-size:.8rem;}
 .week-item:last-child{border-bottom:none;}
@@ -1126,6 +1143,128 @@ function closeSidebar(){
 /* ---- Notification bell. "New" = id higher than the last one seen in this browser. ---- */
 const BELL_KEY = 'osas_notif_seen_<?= (int) $userId ?>';
 function bellSeen(){ try{ return parseInt(localStorage.getItem(BELL_KEY) || '0', 10) || 0; }catch(e){ return 0; } }
+/* ---- Rich notification cards: title + specific details + CURRENT status + timestamp + action button ----
+   The stored message is the "specific details". Which flow step it belongs to is read from the wording the
+   system itself writes, then the live reservation (looked up by its RES- reference) decides the status chips
+   and which button makes sense NOW (e.g. "Submit report" disappears once the report is sent). */
+const NOTIF_TYPES = [
+  // [type, pattern, title, tone]   — order matters: the more specific pattern first
+  ['account_approved',  /^Your account has been approved/,                                    'Account approved',                 'ok'],
+  ['account_rejected',  /^Your account request was not approved/,                             'Account not approved',             'bad'],
+  ['vote_withdrawn',    /withdrew their (approval|decline) on /,                              'Decision withdrawn',               'warn'],
+  ['res_approved',      /your reservation is now APPROVED\.|^Good news! .* has been approved \(\d+ approvals reached\)/, 'Reservation approved', 'ok'],
+  ['res_declined',      /your reservation is now DECLINED\.|\) has been declined\. Reason:/,  'Reservation declined',            'bad'],
+  ['vote_approved',     /^.+? approved Your reservation "/,                                   'Approval received',                'ok'],
+  ['vote_declined',     /^.+? declined Your reservation "/,                                   'Decline received',                 'bad'],
+  ['res_submitted',     /has been submitted.* and is pending OSAS approval\./,                'Reservation submitted',            'info'],
+  ['res_updated',       /was updated and (resubmitted|is still pending)/,                     'Reservation updated',              'info'],
+  ['res_cancelled',     /\) has been cancelled\./,                                            'Reservation cancelled',            'warn'],
+  ['event_done',        /has finished, so the reservation is now marked Done|has been marked completed\./, 'Event finished',     'info'],
+  ['report_revision',   /^OSAS has requested changes to your post-event report/,              'Changes requested on your report', 'warn'],
+  ['report_approved',   /post-event report .* has been approved by OSAS/,                     'Post-event report approved',       'ok'],
+  ['report_resubmitted',/^Your revised post-event report/,                                    'Report resubmitted',               'info'],
+  ['report_submitted',  /^Your post-event report for .* has been submitted as /,              'Report submitted',                 'info'],
+  ['resched_rejected',  /rejected your reschedule request/,                                   'Reschedule rejected',              'bad'],
+  ['resched_approved',  /approved your reschedule request/,                                   'Reschedule approved',              'ok'],
+  ['resched_suggested', /suggested a different schedule for/,                                 'New schedule suggested',           'warn'],
+  ['resched_accepted',  /has been rescheduled to /,                                           'Reservation rescheduled',          'ok'],
+  ['resched_requested', /^Your reschedule request for .* was sent to OSAS/,                   'Reschedule requested',             'info'],
+];
+const RESCHED_LABEL = { pending:'Pending', suggested:'New time suggested', rejected:'Rejected', approved:'Approved', withdrawn:'Withdrawn' };
+
+function notifView(n){
+  const text = String(n.text || '');
+  const def = NOTIF_TYPES.find(t => t[1].test(text));
+  const type = def ? def[0] : 'generic';
+  const refMatch = text.match(/\b(RES-\d{4}-\d+)\b/);
+  const idx = refMatch ? reservationsData.findIndex(x => x.ref === refMatch[1]) : -1;
+  const r = idx >= 0 ? reservationsData[idx] : null;
+  const v = { type, title: def ? def[2] : 'Notification', tone: def ? def[3] : 'info', r, idx, chips: [], action: null };
+  const open  = (label, fn)  => { v.action = { label, fn }; };
+  const link  = (label, href) => { v.action = { label, href }; };
+  const chip = (label, cls) => v.chips.push({ label, cls });
+
+  if(type === 'account_approved'){ chip('Account: Approved', 'b-approved'); open('Make a reservation', () => navigateStudent('newReservation')); return v; }
+  if(type === 'account_rejected'){ chip('Account: Not approved', 'b-declined'); return v; }
+  if(!r) return v;                                   // nothing live to show or act on
+
+  // ---- current status chips (live, not what it was when the message was written) ----
+  chip(badgeLabel(r.status), badgeClass(r.status));
+  if(/^(report_|event_done)/.test(type)){
+    if(!r.report)                              chip('Report: Not submitted', 'b-pending');
+    else if(r.report.status === 'pending')     chip('Report: Under review', 'b-pending');
+    else if(r.report.status === 'needs_revision') chip('Report: Needs changes', 'b-declined');
+    else                                       chip('Report: Approved', 'b-approved');
+  }
+  if(/^resched_/.test(type) && r.reschedule){
+    const s = r.reschedule.status;
+    chip('Reschedule: ' + (RESCHED_LABEL[s] || s), s === 'approved' ? 'b-approved' : s === 'rejected' ? 'b-declined' : 'b-pending');
+  }
+
+  // ---- the button that matches the next step of the flow ----
+  const rep = r.report ? r.report.status : null;
+  const reportStep = () => {
+    if(!r.report)             return open('Submit report', () => openPostEventForm(idx));
+    if(rep === 'needs_revision') return open('Revise report', () => openPostEventForm(idx));
+    if(rep === 'approved')    return link('Download clearance', `api/clearance_pdf.php?id=${encodeURIComponent(r.id)}`);
+    return open('View report status', () => openReservationDetail(idx));
+  };
+  switch(type){
+    case 'res_submitted': case 'res_updated':
+      open('View request', () => openReservationDetail(idx)); break;
+    case 'vote_approved': case 'vote_declined': case 'vote_withdrawn':
+      open('View messages', () => openReservationMessage(idx)); break;
+    case 'res_approved':
+      open('View reservation', () => openReservationDetail(idx)); break;
+    case 'res_declined':
+      if(canEdit(r)) open('Edit & Resubmit', () => startEditReservation(idx));
+      else open('See reason', () => openReservationDetail(idx));
+      break;
+    case 'res_cancelled':
+      open('View history', () => navigateStudent('history')); break;
+    case 'event_done': case 'report_revision': case 'report_approved': case 'report_submitted': case 'report_resubmitted':
+      if(r.status === 'completed') reportStep(); else open('View reservation', () => openReservationDetail(idx));
+      break;
+    case 'resched_suggested':
+      open(r.reschedule && r.reschedule.status === 'suggested' ? 'Review suggestion' : 'View request', () => openReservationDetail(idx)); break;
+    case 'resched_rejected':
+      if(canChange(r)) open('Request again', () => openRescheduleModal(idx));
+      else open('View reservation', () => openReservationDetail(idx));
+      break;
+    case 'resched_requested':
+      open('View request', () => openReservationDetail(idx)); break;
+    case 'resched_approved': case 'resched_accepted':
+      open('View reservation', () => openReservationDetail(idx)); break;
+    default:
+      open('View reservation', () => openReservationDetail(idx));
+  }
+  return v;
+}
+
+function notifCardHtml(n, unread){
+  const v = notifView(n);
+  const meta = v.r ? `<div class="nc-meta">${escapeHtml(v.r.venue)} · ${fmtDate(v.r.y, v.r.m, v.r.d)} · ${escapeHtml(v.r.time)}</div>` : '';
+  const chips = v.chips.map(c => `<span class="badge ${c.cls}">${escapeHtml(c.label)}</span>`).join('');
+  let btn = '';
+  if(v.action && v.action.href) btn = `<a class="nc-btn" href="${escapeHtml(v.action.href)}" download>${escapeHtml(v.action.label)}</a>`;
+  else if(v.action)             btn = `<button type="button" class="nc-btn" onclick="bellGo(${n.id})">${escapeHtml(v.action.label)}</button>`;
+  return `<div class="notif-item nc nc--${v.tone}${unread ? ' unread' : ''}">
+    <div class="nc-title">${escapeHtml(v.title)}</div>
+    <div class="nc-time" title="${escapeHtml(n.at || '')}">${n.at ? escapeHtml(n.at) + ' · ' : ''}${escapeHtml(n.time)}</div>
+    <div class="nc-text">${escapeHtml(n.text)}</div>
+    ${meta}
+    ${(chips || btn) ? `<div class="nc-foot"><div class="nc-chips">${chips}</div>${btn}</div>` : ''}
+  </div>`;
+}
+
+function bellGo(id){
+  const n = notificationsData.find(x => x.id === Number(id));
+  if(!n) return;
+  const v = notifView(n);
+  closeBell();
+  if(v.action && v.action.fn) v.action.fn();
+}
+
 function renderBell(){
   const seen = bellSeen();
   const unread = notificationsData.filter(n => n.id > seen).length;
@@ -1133,7 +1272,7 @@ function renderBell(){
   dot.textContent = unread > 9 ? '9+' : unread;
   dot.hidden = unread === 0;
   document.getElementById('bellList').innerHTML = notificationsData.length
-    ? notificationsData.map(n => `<div class="notif-item${n.id > seen ? ' unread' : ''}">${escapeHtml(n.text)}<div class="n-time">${escapeHtml(n.time)}</div></div>`).join('')
+    ? notificationsData.map(n => notifCardHtml(n, n.id > seen)).join('')
     : `<p class="empty-note">No notifications.</p>`;
 }
 function closeBell(){
@@ -1212,7 +1351,7 @@ function renderDashboardPage(main){
 
   let notifHtml = "";
   notificationsData.slice(0,3).forEach(n=>{
-    notifHtml += `<div class="notif-item">${escapeHtml(n.text)}<div class="n-time">${escapeHtml(n.time)}</div></div>`;
+    notifHtml += notifCardHtml(n, false);
   });
   if(notificationsData.length===0) notifHtml = `<p class="empty-note">No notifications.</p>`;
 
