@@ -756,7 +756,7 @@ const pages = {
               <td class="q-actions" data-label="Action"><div class="actions">
                 <button class="btn btn--sm ${r.review_status === 'pending' ? 'btn--primary' : 'btn--outline'}" data-report="${r.id}">${r.review_status === 'pending' ? 'Review' : 'View'}</button>
                 <a class="btn btn--sm btn--ghost" href="api/report_pdf.php?id=${r.id}" title="Download this report as PDF">PDF</a>
-                ${r.review_status === 'approved' ? `<a class="btn btn--sm btn--ghost" href="api/clearance_pdf.php?report_id=${r.id}" title="Download the activity clearance">Clearance</a>` : ''}
+                ${r.review_status === 'approved' && session.can_clearance ? `<a class="btn btn--sm btn--ghost" href="api/clearance_pdf.php?report_id=${r.id}" title="Download the activity clearance">Clearance</a>` : ''}
               </div></td>
             </tr>`).join('') : emptyRow(7, 'No post-event reports have been submitted for this period yet.')}
           </tbody></table></div></div>`;
@@ -1093,7 +1093,7 @@ async function openReportView(reportId) {
     <div class="form-actions">
       <button class="btn btn--ghost" data-close>Close</button>
       <a class="btn btn--primary" href="api/report_pdf.php?id=${r.id}">Download PDF</a>
-      ${r.review_status === 'approved' ? `<a class="btn btn--primary" href="api/clearance_pdf.php?report_id=${r.id}">Download Clearance</a>` : ''}
+      ${r.review_status === 'approved' && session.can_clearance ? `<a class="btn btn--primary" href="api/clearance_pdf.php?report_id=${r.id}">Download Clearance</a>` : ''}
     </div>`, (root) => {
     $$('[data-view]', root).forEach((fig) => {
       fig.onclick = () => openLightbox(fig.dataset.view, fig.dataset.caption);
