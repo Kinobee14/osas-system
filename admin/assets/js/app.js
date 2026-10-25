@@ -228,7 +228,7 @@ const pages = {
             ${tabs(['pending', 'approved', 'declined', 'completed', 'cancelled', 'all'], this.filter)}
             <span class="vote-rule"><strong>${approvals_needed}</strong> approvals approve · <strong>${declines_needed}</strong> declines decline · you can undo your vote</span>
           </div>
-          <div class="table-wrap"><table class="queue-table">
+          <div class="table-wrap"><table class="resp-table queue-table">
             <thead><tr><th>Request</th><th>Nature of Activity</th><th>Venue &amp; Schedule</th><th>Requested By</th><th>Form</th><th>Status</th><th>Votes</th><th>Your Vote</th></tr></thead>
             <tbody>${rows.length ? rows.map((r) => `
               <tr>
@@ -419,20 +419,30 @@ const pages = {
           <span class="notice__dot">!</span>
           <span><strong>${needsReview} post-event report${needsReview === 1 ? '' : 's'}</strong> submitted by students are waiting on your review. Look for the amber <span class="pe-inline">!</span> beside the Done status.</span>
         </div>` : ''}
-        <div class="card"><div class="table-wrap"><table>
-          <thead><tr><th>Ref No.</th><th>Name</th><th>Title of Activity</th><th>Nature of Activity</th><th>Venue</th><th>Date</th><th>Time</th><th>No. of Participants</th><th>Sponsoring Org / Class</th><th>Form</th><th>Status</th><th>Action</th></tr></thead>
+        <div class="card"><div class="table-wrap"><table class="resp-table all-table">
+          <thead><tr><th>Request</th><th>Nature of Activity</th><th>Venue &amp; Schedule</th><th>Requested By</th><th>Form</th><th>Status</th><th>Action</th></tr></thead>
           <tbody>${rows.length ? rows.map((r) => `
             <tr>
-              <td>${esc(r.ref_no)}</td><td>${esc(r.requested_by)}</td><td><strong>${esc(r.event_name)}</strong></td>
-              <td class="cell-wrap" data-nature="${esc(csv(r.nature_of_activity).join('|'))}">${esc(natureText(r))}</td>
-              <td>${esc(r.venue || r.venue_name)}</td><td>${dateCell(r)}</td>
-              <td class="nowrap">${fmtTime(r.start_time)} – ${fmtTime(r.end_time)}</td>
-              <td>${esc(dash(r.participants))}</td>
-              <td class="cell-wrap">${esc(dash(r.sponsoring_org))}</td>
-              <td>${formButton(r)}</td>
-              <td>${statusCell(r)}</td>
-              <td><div class="actions">${reservationAction(r)}</div></td>
-            </tr>`).join('') : emptyRow(12)}
+              <td class="q-title" data-label="Request">
+                <strong class="q-name" title="${esc(r.event_name)}">${esc(r.event_name)}</strong>
+                <div class="sub muted">${esc(r.ref_no)}</div>
+                ${r.created_at ? `<div class="sub muted">Submitted ${esc(fmtDate(r.created_at))}</div>` : ''}
+              </td>
+              <td class="cell-wrap" data-label="Nature of Activity" data-nature="${esc(csv(r.nature_of_activity).join('|'))}">${esc(natureText(r))}</td>
+              <td data-label="Venue &amp; Schedule">
+                <div>${esc(r.venue || r.venue_name)}</div>
+                <div>${dateCell(r)}</div>
+                <div class="sub muted">${fmtTime(r.start_time)} – ${fmtTime(r.end_time)}</div>
+              </td>
+              <td data-label="Requested By">
+                <div class="q-who">${esc(r.requested_by)}</div>
+                <div class="sub muted q-org" title="${esc(dash(r.sponsoring_org))}">${esc(dash(r.sponsoring_org))}</div>
+                <div class="sub muted">${esc(dash(r.participants))} participants</div>
+              </td>
+              <td data-label="Form">${formButton(r)}</td>
+              <td data-label="Status">${statusCell(r)}</td>
+              <td class="q-actions" data-label="Action"><div class="actions">${reservationAction(r)}</div></td>
+            </tr>`).join('') : emptyRow(7)}
           </tbody></table></div></div>`;
     },
     mount(root) {
@@ -702,13 +712,13 @@ const pages = {
 
         ${rep.awaiting_submission.length ? `
         <h2 class="section-title">Awaiting Student Submission <span class="count-pill">${rep.awaiting_submission.length}</span></h2>
-        <div class="card"><div class="table-wrap"><table>
+        <div class="card"><div class="table-wrap"><table class="resp-table wait-table">
           <thead><tr><th>Ref No.</th><th>Event</th><th>Venue</th><th>Date Held</th><th>Waiting</th></tr></thead>
           <tbody>${rep.awaiting_submission.map((p) => `
             <tr>
-              <td>${esc(p.ref_no)}</td><td>${esc(p.event_name)}</td><td>${esc(p.venue)}</td>
-              <td>${fmtDate(p.event_date)}</td>
-              <td><span class="badge badge--${p.days_since > 7 ? 'declined' : 'pending'}">${p.days_since} day${p.days_since == 1 ? '' : 's'}</span></td>
+              <td data-label="Ref No.">${esc(p.ref_no)}</td><td class="q-title" data-label="Event"><strong class="q-name" title="${esc(p.event_name)}">${esc(p.event_name)}</strong></td><td data-label="Venue">${esc(p.venue)}</td>
+              <td data-label="Date Held">${fmtDate(p.event_date)}</td>
+              <td data-label="Waiting"><span class="badge badge--${p.days_since > 7 ? 'declined' : 'pending'}">${p.days_since} day${p.days_since == 1 ? '' : 's'}</span></td>
             </tr>`).join('')}
           </tbody></table></div></div>
         <p class="muted" style="margin:-10px 0 20px;font-size:12px;">Nothing to do here yet — these are waiting on the student to submit, not on you.</p>` : ''}
@@ -720,26 +730,35 @@ const pages = {
         </div>
 
         <h2 class="section-title">Report Register</h2>
-        <div class="card"><div class="table-wrap"><table>
-          <thead><tr><th>Report No.</th><th>Event</th><th>Venue</th><th>Date Held</th><th>Attendance</th><th>Photos</th><th>Resources</th><th>Venue</th><th>Submitted By</th><th>Review</th><th>Action</th></tr></thead>
+        <div class="card"><div class="table-wrap"><table class="resp-table rep-table">
+          <thead><tr><th>Report</th><th>Venue &amp; Date Held</th><th>Attendance</th><th>Condition</th><th>Submitted By</th><th>Review</th><th>Action</th></tr></thead>
           <tbody>${rep.rows.length ? rep.rows.map((r) => `
             <tr>
-              <td><strong>${esc(r.report_no)}</strong></td>
-              <td>${esc(r.event_name)}<div class="muted sub">${esc(r.ref_no)} · ${esc(r.requested_by)}</div></td>
-              <td>${esc(r.venue)}</td>
-              <td>${fmtDate(r.event_date)}</td>
-              <td>${Number(r.attendees_count).toLocaleString()}</td>
-              <td>${r.photo_count ? `${r.photo_count} 📷` : '<span class="muted">—</span>'}</td>
-              <td>${pill(condition, r.resources_condition)}</td>
-              <td>${pill(venueCond, r.venue_condition)}</td>
-              <td>${esc(r.prepared_by)}</td>
-              <td><span class="badge badge--${reviewTone[r.review_status] || 'completed'}">${esc(reviewLabel[r.review_status] || r.review_status)}</span></td>
-              <td><div class="actions">
+              <td class="q-title" data-label="Report">
+                <strong class="q-name" title="${esc(r.event_name)}">${esc(r.event_name)}</strong>
+                <div class="sub muted">${esc(r.report_no)}</div>
+                <div class="sub muted">${esc(r.ref_no)} · ${esc(r.requested_by)}</div>
+              </td>
+              <td data-label="Venue &amp; Date Held">
+                <div>${esc(r.venue)}</div>
+                <div>${fmtDate(r.event_date)}</div>
+              </td>
+              <td data-label="Attendance">
+                <div>${Number(r.attendees_count).toLocaleString()}</div>
+                <div class="sub muted">${r.photo_count ? `${r.photo_count} 📷` : 'No photos'}</div>
+              </td>
+              <td data-label="Condition">
+                <div class="sub muted">Resources</div>${pill(condition, r.resources_condition)}
+                <div class="sub muted">Venue</div>${pill(venueCond, r.venue_condition)}
+              </td>
+              <td data-label="Submitted By">${esc(r.prepared_by)}</td>
+              <td data-label="Review"><span class="badge badge--${reviewTone[r.review_status] || 'completed'}">${esc(reviewLabel[r.review_status] || r.review_status)}</span></td>
+              <td class="q-actions" data-label="Action"><div class="actions">
                 <button class="btn btn--sm ${r.review_status === 'pending' ? 'btn--primary' : 'btn--outline'}" data-report="${r.id}">${r.review_status === 'pending' ? 'Review' : 'View'}</button>
                 <a class="btn btn--sm btn--ghost" href="api/report_pdf.php?id=${r.id}" title="Download this report as PDF">PDF</a>
                 ${r.review_status === 'approved' ? `<a class="btn btn--sm btn--ghost" href="api/clearance_pdf.php?report_id=${r.id}" title="Download the activity clearance">Clearance</a>` : ''}
               </div></td>
-            </tr>`).join('') : emptyRow(11, 'No post-event reports have been submitted for this period yet.')}
+            </tr>`).join('') : emptyRow(7, 'No post-event reports have been submitted for this period yet.')}
           </tbody></table></div></div>`;
     },
     mount(root) {
