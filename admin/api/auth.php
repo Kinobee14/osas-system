@@ -32,7 +32,10 @@ switch ($action) {
         respond(true, null, 'Logged out.');
 
     case 'me':
-        respond(true, require_auth());
+        $me = require_auth();
+        require_once __DIR__ . '/../../shared/clearance_access.php';
+        $me['can_clearance'] = admin_can_download_clearance($me);
+        respond(true, $me);
 
     default:
         respond(false, null, 'Unknown action', 404);
