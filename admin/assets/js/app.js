@@ -228,22 +228,31 @@ const pages = {
             ${tabs(['pending', 'approved', 'declined', 'completed', 'cancelled', 'all'], this.filter)}
             <span class="vote-rule"><strong>${approvals_needed}</strong> approvals approve · <strong>${declines_needed}</strong> declines decline · you can undo your vote</span>
           </div>
-          <div class="table-wrap"><table>
-            <thead><tr><th>Ref No.</th><th>Title of Activity</th><th>Nature of Activity</th><th>Venue</th><th>Date</th><th>Time</th><th>No. of Participants</th><th>Sponsoring Org / Class</th><th>Requested By</th><th>Form</th><th>Status</th><th>Votes</th><th>Your Vote</th></tr></thead>
+          <div class="table-wrap"><table class="queue-table">
+            <thead><tr><th>Request</th><th>Nature of Activity</th><th>Venue &amp; Schedule</th><th>Requested By</th><th>Form</th><th>Status</th><th>Votes</th><th>Your Vote</th></tr></thead>
             <tbody>${rows.length ? rows.map((r) => `
               <tr>
-                <td>${esc(r.ref_no)}</td><td><strong>${esc(r.event_name)}</strong></td>
-                <td class="cell-wrap" data-nature="${esc(csv(r.nature_of_activity).join('|'))}">${esc(natureText(r))}</td>
-                <td>${esc(r.venue || r.venue_name)}</td><td>${dateCell(r)}</td>
-                <td class="nowrap">${fmtTime(r.start_time)} – ${fmtTime(r.end_time)}</td>
-                <td>${esc(dash(r.participants))}</td>
-                <td class="cell-wrap">${esc(dash(r.sponsoring_org))}</td>
-                <td>${esc(r.requested_by)}</td>
-                <td>${formButton(r)}</td>
-                <td>${statusCell(r)}</td>
-                <td>${voteTally(r, approvals_needed, declines_needed)}${messageButton(r)}</td>
-                <td><div class="actions">${voteButtons(r)}</div></td>
-              </tr>`).join('') : emptyRow(13, 'The queue is empty.')}
+                <td class="q-title" data-label="Request">
+                  <strong class="q-name" title="${esc(r.event_name)}">${esc(r.event_name)}</strong>
+                  <div class="sub muted">${esc(r.ref_no)}</div>
+                  ${r.created_at ? `<div class="sub muted">Submitted ${esc(fmtDate(r.created_at))}</div>` : ''}
+                </td>
+                <td class="cell-wrap" data-label="Nature of Activity" data-nature="${esc(csv(r.nature_of_activity).join('|'))}">${esc(natureText(r))}</td>
+                <td data-label="Venue &amp; Schedule">
+                  <div>${esc(r.venue || r.venue_name)}</div>
+                  <div>${dateCell(r)}</div>
+                  <div class="sub muted">${fmtTime(r.start_time)} – ${fmtTime(r.end_time)}</div>
+                </td>
+                <td data-label="Requested By">
+                  <div class="q-who">${esc(r.requested_by)}</div>
+                  <div class="sub muted q-org" title="${esc(dash(r.sponsoring_org))}">${esc(dash(r.sponsoring_org))}</div>
+                  <div class="sub muted">${esc(dash(r.participants))} participants</div>
+                </td>
+                <td data-label="Form">${formButton(r)}</td>
+                <td data-label="Status">${statusCell(r)}</td>
+                <td data-label="Votes">${voteTally(r, approvals_needed, declines_needed)}${messageButton(r)}</td>
+                <td class="q-actions" data-label="Your Vote"><div class="actions">${voteButtons(r)}</div></td>
+              </tr>`).join('') : emptyRow(8, 'The queue is empty.')}
             </tbody></table></div>
         </div>`;
     },
@@ -1279,6 +1288,7 @@ function enhanceTables(root, name, page) {
       text: [...row.cells].filter((c) => !c.querySelector('.actions')).map((c) => c.textContent).join(' ').toLowerCase(),
     }));
     // Nature of Activity: filter dropdown + sortable column header (approvals and all-reservations only)
+    let sortBtn = null;   // "Sort by nature" button, shown only where the column header is hidden (card layout)
     const natIdx = cfg.nature ? [...table.tHead.rows[0].cells].findIndex((th) => th.textContent.trim() === 'Nature of Activity') : -1;
     items.forEach((it, n) => {
       it.order = n;
@@ -1304,6 +1314,11 @@ function enhanceTables(root, name, page) {
         sel.innerHTML = `<option value="">All natures of activity</option>${[...NATURE_LIST, 'Others'].map((n) => `<option value="${esc(n)}"${st.nature === n ? ' selected' : ''}>${esc(n)}</option>`).join('')}`;
         sel.addEventListener('change', () => { st.nature = sel.value; st.page = 1; draw(); });
         tools.appendChild(sel);
+        sortBtn = document.createElement('button');
+        sortBtn.type = 'button';
+        sortBtn.className = 'btn btn--sm btn--outline nature-sort';
+        sortBtn.addEventListener('click', () => { st.sort = st.sort === '' ? 'asc' : st.sort === 'asc' ? 'desc' : ''; st.page = 1; draw(); });
+        tools.appendChild(sortBtn);
       }
     }
     const sortTh = natIdx >= 0 ? table.tHead.rows[0].cells[natIdx] : null;
@@ -1340,6 +1355,7 @@ function enhanceTables(root, name, page) {
         hits.sort((a, b) => (st.sort ? dir * a.natureKey.localeCompare(b.natureKey) : 0) || a.order - b.order);
         hits.forEach((it) => body.insertBefore(it.row, noMatch));
         if (st.sort) sortTh.dataset.dir = st.sort; else delete sortTh.dataset.dir;
+        if (sortBtn) sortBtn.textContent = st.sort === 'asc' ? 'Sort by nature: A–Z ▲' : st.sort === 'desc' ? 'Sort by nature: Z–A ▼' : 'Sort by nature';
       }
       const pages = Math.max(1, Math.ceil(hits.length / PAGE_SIZE));
       st.page = Math.min(Math.max(1, st.page), pages);

@@ -489,3 +489,59 @@ td .sub { font-size: 10.5px; font-weight: 400; margin-top: 2px; }
 .pager__gap { color: var(--muted); padding: 0 4px; }
 tbody tr[hidden] { display: none; }
 @media (max-width: 640px) { .pager { justify-content: center; } .tbl-tools .search { max-width: none; } }
+/* ==========  Approval Queue table  ==========
+   Why it scrolled sideways: 13 columns, headers and the first column forced to one line (white-space: nowrap),
+   action buttons forced onto one row, and several minimum widths (cell-wrap 150px, tally 110px, status 116px).
+   Now: 8 columns (related info stacked in one cell), a fixed layout that wraps text instead of growing, buttons
+   stacked in the last column, and a card layout when the screen is too narrow for a table. */
+.queue-table { table-layout: fixed; min-width: 0; width: 100%; }
+.queue-table th { white-space: normal; padding: 12px 8px; line-height: 1.3; vertical-align: bottom; }
+.queue-table td { padding: 12px 8px; vertical-align: top; line-height: 1.45; overflow-wrap: anywhere; }
+.queue-table td:first-child { white-space: normal; }
+.queue-table th:nth-child(1) { width: 21%; }
+.queue-table th:nth-child(2) { width: 11%; }
+.queue-table th:nth-child(3) { width: 14%; }
+.queue-table th:nth-child(4) { width: 14%; }
+.queue-table th:nth-child(5) { width: 9%; }
+.queue-table th:nth-child(6) { width: 9%; }
+.queue-table th:nth-child(7) { width: 11%; }
+.queue-table th:nth-child(8) { width: 11%; }
+.queue-table .cell-wrap { min-width: 0; max-width: none; }
+.queue-table .q-name { display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 13.5px; line-height: 1.35; }
+.queue-table .q-org { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.queue-table .q-who { font-weight: 600; }
+.queue-table td .sub { margin-top: 3px; font-size: 11.5px; }
+.queue-table .status-cell { min-width: 0; flex-wrap: wrap; justify-content: flex-start; }
+.queue-table .tally { min-width: 0; }
+.queue-table .btn { white-space: normal; text-align: center; line-height: 1.25; }
+.queue-table [data-files], .queue-table [data-msg] { width: 100%; justify-content: center; }
+.queue-table .actions { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 6px; }
+.queue-table .actions .btn { width: 100%; padding: 6px 8px; }
+.queue-table .actions .muted { display: block; font-size: 11.5px; }
+.nature-sort { display: none; }
+
+/* Too narrow for a table (this also covers tablets and phones): one card per request. */
+@media (max-width: 1240px) {
+  .queue-table { table-layout: auto; }
+  .queue-table thead { display: none; }
+  .queue-table, .queue-table tbody { display: block; }
+  .queue-table tbody tr { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px 20px; padding: 14px 16px; margin: 0 0 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+  .queue-table tbody tr[hidden] { display: none; }
+  .queue-table tbody tr:hover { background: var(--cream-2); }
+  .queue-table td { display: block; padding: 0; border: 0; min-width: 0; }
+  .queue-table td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 3px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .queue-table td.q-title, .queue-table td.q-actions { grid-column: 1 / -1; }
+  .queue-table td.q-title::before { display: none; }
+  .queue-table .q-name { display: block; -webkit-line-clamp: unset; line-clamp: unset; font-size: 15px; }
+  .queue-table .q-org { display: block; -webkit-line-clamp: unset; line-clamp: unset; }
+  .queue-table [data-files], .queue-table [data-msg] { width: auto; }
+  .queue-table .actions { flex-direction: row; flex-wrap: wrap; }
+  .queue-table .actions .btn { width: auto; flex: 0 1 auto; }
+  .queue-table td.empty { padding: 28px 10px; text-align: center; }
+  .nature-sort { display: inline-flex; }
+}
+@media (max-width: 560px) {
+  .queue-table tbody tr { grid-template-columns: 1fr 1fr; padding: 12px; }
+  .queue-table td.q-actions .actions .btn { flex: 1 1 calc(50% - 6px); }
+  .tbl-tools .nature-filter { max-width: none; width: 100%; }
+}
