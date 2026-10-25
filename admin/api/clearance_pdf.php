@@ -6,6 +6,12 @@ if (empty($_SESSION['admin'])) {
 }
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../../shared/clearance.php';
+require_once __DIR__ . '/../../shared/clearance_access.php';
+
+if (!admin_can_download_clearance($_SESSION['admin'])) {
+    http_response_code(403); header('Content-Type: text/plain');
+    echo 'Your account is not allowed to download the clearance.'; exit;
+}
 
 $pdo = db();
 $rid = filter_var($_GET['report_id'] ?? null, FILTER_VALIDATE_INT);
