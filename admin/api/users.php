@@ -5,7 +5,7 @@
 // PUT  {id,firstName,lastName,email,role,organization}      update
 // POST ?action=toggle {id}   activate / deactivate
 require __DIR__ . '/_bootstrap.php';
-require_auth();
+require_osas(require_auth());   // OSAS only
 $pdo = db();
 $ROLES = ['Student', 'Admin', 'Resource Keeper', 'Faculty'];
 

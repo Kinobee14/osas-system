@@ -59,6 +59,9 @@ $sponsoringOrg = mb_substr(trim($_POST['sponsoring_org'] ?? ''), 0, 150);
 $sourceOfFund  = mb_substr(trim($_POST['source_of_fund'] ?? ''), 0, 150);
 $adviserName   = mb_substr(trim($_POST['adviser_name'] ?? ''), 0, 150);
 $recommending  = mb_substr(trim($_POST['recommending_name'] ?? ''), 0, 150);
+require_once __DIR__ . '/../../shared/form_signatures.php';
+$adviserSig    = fs_clean($_POST['adviser_signature'] ?? '');
+$recSig        = fs_clean($_POST['recommending_signature'] ?? '');
 $remarks       = mb_substr(trim($_POST['remarks'] ?? ''), 0, 255);
 $checklistRaw  = $_POST['attachments_checklist'] ?? '[]';
 
@@ -73,6 +76,7 @@ $labels = json_decode($_POST['requirement_labels'] ?? '[]', true);
 if (!is_array($labels)) $labels = [];
 
 if (!$resId) ru_fail(422, 'Missing reservation.');
+if (!$adviserSig || !$recSig || $adviserName === '' || $recommending === '') ru_fail(422, 'Please add the signature and printed name for both the Club / Organization / Adviser and the Recommending Approval.');
 if ($eventName === '' || $venueName === '' || $date === '' || $start === '' || $end === '') {
     ru_fail(422, 'Please fill in all required fields.');
 }
@@ -211,6 +215,11 @@ try {
         throw new RuntimeException('Please upload a picture. A reservation needs at least one.');
     }
 
+    if (fs_ensure_columns($pdo)) {
+        $pdo->prepare('UPDATE reservations SET adviser_signature = ?, recommending_signature = ? WHERE id = ?')
+            ->execute([$adviserSig, $recSig, $resId]);
+    }
+
     // --- Save the form and send it back to OSAS for a fresh review. ---
     $pdo->prepare(
         "UPDATE reservations SET
@@ -256,8 +265,8 @@ try {
     } catch (Throwable $ignored) { /* table may not exist before the migration */ }
 
     notify_student($pdo, $userId, $wasDeclined
-        ? "Your reservation \"{$eventName}\" ({$res['ref_no']}) was updated and resubmitted. It is pending OSAS approval again."
-        : "Your reservation \"{$eventName}\" ({$res['ref_no']}) was updated and is still pending OSAS approval.");
+        ? "Your reservation \"{$eventName}\" ({$res['ref_no']}) was updated and resubmitted. It is pending approval again (Administration and Academic Affairs first, then OSAS)."
+        : "Your reservation \"{$eventName}\" ({$res['ref_no']}) was updated and is still pending approval.");
 
     $pdo->commit();
 } catch (SchedConflictException $e) {

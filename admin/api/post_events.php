@@ -95,6 +95,7 @@ if (method() === 'GET') {
 }
 
 if (method() === 'POST') {
+    require_osas($admin);   // only OSAS approves a report or sends it back
     $in = body();
     $id = int_id($in['id'] ?? null);
     $action = $_GET['action'] ?? '';

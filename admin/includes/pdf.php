@@ -445,8 +445,8 @@ class SimplePdf
         foreach ($this->images as $img) {
             $objects[$imageObjStart + $i] = sprintf(
                 "<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceRGB "
-                . "/BitsPerComponent 8 /Filter /DCTDecode /Length %d >>\nstream\n%s\nendstream",
-                $img['w'], $img['h'], strlen($img['data']), $img['data']
+                . "/BitsPerComponent 8 /Filter /%s /Length %d >>\nstream\n%s\nendstream",
+                $img['w'], $img['h'], $img['filter'] ?? 'DCTDecode', strlen($img['data']), $img['data']
             );
             $i++;
         }

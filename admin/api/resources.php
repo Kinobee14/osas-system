@@ -4,7 +4,7 @@
 // PUT                      update {id, name, stock}
 // DELETE ?id=              delete resource
 require __DIR__ . '/_bootstrap.php';
-require_auth();
+require_osas(require_auth());   // OSAS only
 $pdo = db();
 
 function clean_resource(array $r): array {

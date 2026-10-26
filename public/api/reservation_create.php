@@ -69,6 +69,11 @@ $adviserName   = mb_substr(trim($_POST['adviser_name'] ?? ''), 0, 150);
 $recommending  = mb_substr(trim($_POST['recommending_name'] ?? ''), 0, 150);
 $remarks       = mb_substr(trim($_POST['remarks'] ?? ''), 0, 255);
 $checklistRaw  = $_POST['attachments_checklist'] ?? '[]';
+require_once __DIR__ . '/../../shared/form_signatures.php';
+$adviserSig    = fs_clean($_POST['adviser_signature'] ?? '');
+$recSig        = fs_clean($_POST['recommending_signature'] ?? '');
+
+if (!$adviserSig || !$recSig || $adviserName === '' || $recommending === '') fail(422, 'Please add the signature and printed name for both the Club / Organization / Adviser and the Recommending Approval.');
 
 $allowedNature = ['Seminar / Convention','Educational Tour','Immersion','Community Extension','Academic Requirements','Others'];
 $allowedChecklist = ['List of Students','Project Proposal','Budget Proposal',"Instructor's Acceptance of Responsibility",'Proposed Program / Invitation','Parent Consent'];
@@ -249,6 +254,7 @@ try {
         ];
     }
 
+    $hasSigCols = fs_ensure_columns($pdo);
     $stmt = $pdo->prepare(
         "INSERT INTO reservations
             (ref_no, event_name, venue_id, venue_name, campus, activity_scope, date_prepared, nature_of_activity, nature_other,
@@ -283,6 +289,10 @@ try {
         ':student_id'   => $userId,
     ]);
     $reservationId = (int) $pdo->lastInsertId();
+    if ($hasSigCols && ($adviserSig || $recSig)) {
+        $pdo->prepare('UPDATE reservations SET adviser_signature = ?, recommending_signature = ? WHERE id = ?')
+            ->execute([$adviserSig, $recSig, $reservationId]);
+    }
 
     // Requirement files — metadata only; the bytes are already on disk.
     $insertFile = $pdo->prepare(
@@ -314,7 +324,7 @@ try {
     $fileCount = count($storedFiles);
     $plural = $fileCount === 1 ? '' : 's';
     $withFiles = $fileCount ? " with {$fileCount} attachment{$plural}" : '';
-    notify_student($pdo, $userId, "Your reservation request \"{$eventName}\" ({$refNo}) has been submitted{$withFiles} and is pending OSAS approval.");
+    notify_student($pdo, $userId, "Your reservation request \"{$eventName}\" ({$refNo}) has been submitted{$withFiles} and is pending approval — Administration and Academic Affairs review it first, then OSAS gives the final approval.");
 
     $pdo->commit();
 } catch (SchedConflictException $e) {

@@ -33,6 +33,13 @@ function require_auth(): array {
     return $_SESSION['admin'];
 }
 
+/** Stops anyone who is not the OSAS (super admin) account — Administration and Academic Affairs get a 403. */
+function require_osas(array $admin): array {
+    require_once __DIR__ . '/../../shared/approval_flow.php';
+    if (!admin_is_osas($admin)) respond(false, null, 'Only the OSAS account can do this.', 403);
+    return $admin;
+}
+
 function required(array $data, array $fields): void {
     foreach ($fields as $f) {
         if (!isset($data[$f]) || trim((string)$data[$f]) === '') {

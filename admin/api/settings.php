@@ -26,6 +26,13 @@ if ($action === 'profile') {
 }
 
 if ($action === 'signatories') {
+    require_once __DIR__ . '/../../shared/approval_flow.php';
+    if (!admin_is_osas($admin)) {
+        // "Noted by" belongs to OSAS alone: keep whatever is saved, ignore anything sent for it.
+        $cur = get_signatories($pdo);
+        $in['noted_name']  = $cur['noted_name'];
+        $in['noted_title'] = $cur['noted_title'];
+    }
     required($in, ['approver1_name', 'approver1_title', 'approver2_name', 'approver2_title', 'noted_name', 'noted_title']);
     try {
         save_signatories($pdo, $in);

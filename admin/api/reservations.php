@@ -9,8 +9,10 @@ require __DIR__ . '/_bootstrap.php';
 require_once __DIR__ . '/../../shared/events.php';
 require_once __DIR__ . '/../../shared/scheduling.php';
 require_once __DIR__ . '/../../shared/votes.php';
+require_once __DIR__ . '/../../shared/approval_flow.php';
 $admin = require_auth();
 $pdo = db();
+$myRole = flow_role($admin);   // 'admin' | 'academic' | 'osas' | null
 
 // Anything whose end time has already gone by becomes "completed" on its own —
 // see shared/events.php. Running it here means the Approval Queue, the All
@@ -78,7 +80,7 @@ if (method() === 'GET') {
                 (SELECT pr.review_status FROM post_event_reports pr WHERE pr.reservation_id = r.id) AS report_review_status{$histSelect}
             FROM reservations r LEFT JOIN venues v ON v.id = r.venue_id"
         . ($where ? ' WHERE ' . implode(' AND ', $where) : '')
-        . ' ORDER BY r.event_date DESC';
+        . (!empty($_GET['queue']) ? ' ORDER BY r.created_at ASC, r.id ASC' : ' ORDER BY r.event_date DESC');   // approval queue: first come, first served
     $st = $pdo->prepare($sql);
     $st->execute($args);
     $rows = $st->fetchAll();
@@ -109,13 +111,32 @@ if (method() === 'GET') {
             $r['image_count']   = (int)$r['image_count'];
             $r['report_id']     = $r['report_id'] ? (int)$r['report_id'] : null;
             $r['voters'] = $voters[$r['id']] ?? [];
+            // When the student submitted the form (stored in UTC) in campus time.
+            if (!empty($r['created_at'])) {
+                $sub = (new DateTime($r['created_at'], new DateTimeZone('UTC')))->setTimezone(new DateTimeZone(app_timezone()));
+                $r['submitted_date'] = $sub->format('M j, Y');
+                $r['submitted_time'] = $sub->format('g:i A');
+            }
+            // Approval sequence: Administration + Academic first, then OSAS.
+            $fl = flow_state($pdo, (int)$r['id']);
+            $r['flow'] = $fl['steps'];
+            foreach ($r['flow'] as $k => &$stp) { $stp['label'] = FLOW_LABEL[$k]; $stp['at'] = $stp['at'] ? (new DateTime($stp['at'], new DateTimeZone('UTC')))->setTimezone(new DateTimeZone(app_timezone()))->format('M j, Y g:i A') : null; }
+            unset($stp);
+            $r['flow_stage']   = $fl['stage'];
+            $r['waiting_for']  = $fl['waiting_for'];
+            $r['my_role']      = $myRole;
+            $r['my_turn']      = $r['status'] === 'pending' && flow_can_act($myRole, $fl);
             // Can THIS admin take their vote back? (not once the event is over / cancelled / completed)
             $r['can_undo'] = !empty($r['my_vote']) && in_array($r['status'], ['pending', 'approved', 'declined'], true)
                 && ($r['status'] === 'pending' || ($r['event_date'] . ' ' . $r['end_time']) > $nowLocalVotes);
         }
         unset($r); // break the reference before it can bite the next foreach
     }
-    respond(true, ['rows' => $rows, 'votes_needed' => approvals_needed($pdo), 'approvals_needed' => approvals_needed($pdo), 'declines_needed' => declines_needed($pdo)]);
+    // OSAS (the super admin) only sees a pending request once Administration and Academic Affairs both approved it.
+    if (!empty($_GET['queue']) && $myRole === 'osas') {
+        $rows = array_values(array_filter($rows, fn($r) => $r['status'] !== 'pending' || $r['flow_stage'] === 'osas'));
+    }
+    respond(true, ['rows' => $rows, 'my_role' => $myRole, 'votes_needed' => approvals_needed($pdo), 'approvals_needed' => approvals_needed($pdo), 'declines_needed' => declines_needed($pdo)]);
 }
 
 if (method() === 'POST') {
@@ -129,6 +150,7 @@ if (method() === 'POST') {
     if (!$res) respond(false, null, 'Reservation not found.', 404);
 
     if ($action === 'complete') {
+        require_osas($admin);   // only OSAS can mark an event as done
         if ($res['status'] !== 'approved') respond(false, null, 'Only approved reservations can be completed.', 422);
         $pdo->prepare("UPDATE reservations SET status='completed' WHERE id=?")->execute([$id]);
         notify_student($res['student_id'], "Your reservation \"{$res['event_name']}\" ({$res['ref_no']}) has been marked completed.");
@@ -158,15 +180,18 @@ if (method() === 'POST') {
             $pdo->rollBack();
             respond(false, null, 'You have no vote to undo on this reservation.', 404);
         }
+        // Sequence rule: Administration / Academic can't take their approval back once OSAS has acted on it.
+        if ($myRole !== 'osas') {
+            $osasVoted = flow_state($pdo, (int)$id)['steps']['osas']['state'];
+            if (in_array($osasVoted, ['approved', 'declined'], true)) {
+                $pdo->rollBack();
+                respond(false, null, 'OSAS has already acted on this reservation. OSAS must undo first before you can change your decision.', 409);
+            }
+        }
         $pdo->prepare('DELETE FROM reservation_votes WHERE reservation_id = ? AND admin_id = ?')->execute([$id, $admin['id']]);
 
-        $t = $pdo->prepare("SELECT SUM(vote='approve') AS a, SUM(vote='decline') AS d FROM reservation_votes WHERE reservation_id = ?");
-        $t->execute([$id]);
-        $tally = $t->fetch();
-        $approve = (int)$tally['a'];
-        $decline = (int)$tally['d'];
-        $needed  = approvals_needed($pdo);
-        $newStatus = $approve >= $needed ? 'approved' : ($decline >= declines_needed($pdo) ? 'declined' : 'pending');
+        $newStatus = flow_status(flow_state($pdo, (int)$id));
+        $approve = $decline = $needed = 0;
 
         // Stock follows approval: give it back if an approval was withdrawn, take it if undo tipped it to approved.
         if ($curStatus === 'approved' && $newStatus !== 'approved') {
@@ -194,7 +219,14 @@ if (method() === 'POST') {
     }
 
     if (!in_array($action, ['approve', 'decline'], true)) respond(false, null, 'Unknown action', 404);
-    if ($res['status'] !== 'pending') respond(false, null, 'Voting is closed – this reservation is already ' . $res['status'] . '.', 409);
+    if ($res['status'] !== 'pending') respond(false, null, 'This reservation is already ' . $res['status'] . '.', 409);
+    if (!$myRole) respond(false, null, 'Your account is not part of the approval sequence (Administration, Academic Affairs, OSAS).', 403);
+    $flowNow = flow_state($pdo, (int)$id);
+    if ($myRole === 'osas' && $flowNow['stage'] !== 'osas') {
+        respond(false, null, 'Not yet — ' . ($flowNow['waiting_for'] ?: 'Administration and Academic Affairs must approve first') . '. OSAS makes the final decision after both approve.', 409);
+    }
+    if ($flowNow['steps'][$myRole]['state'] === 'skipped') respond(false, null, 'Not needed — this reservation already passed to OSAS for the final approval.', 409);
+    if ($flowNow['steps'][$myRole]['state'] !== 'pending') respond(false, null, 'You already decided on this reservation. Use Undo first if you want to change it.', 409);
 
     // A decline must come with a reason — the student gets to read it.
     // An approval may carry an optional comment / instructions for the student.
@@ -242,17 +274,9 @@ if (method() === 'POST') {
     $pdo->prepare("INSERT INTO reservation_votes (reservation_id, admin_id, vote, reason) VALUES (?, ?, ?, ?)")
         ->execute([$id, $admin['id'], $action, $reason]);
 
-    $t = $pdo->prepare("SELECT SUM(vote='approve') AS a, SUM(vote='decline') AS d FROM reservation_votes WHERE reservation_id = ?");
-    $t->execute([$id]);
-    $tally = $t->fetch();
-    $approve = (int)$tally['a'];
-    $decline = (int)$tally['d'];
-    $needed = approvals_needed($pdo);
-    $dNeeded = declines_needed($pdo);
-
-    $final = null;
-    if ($approve >= $needed) $final = 'approved';
-    elseif ($decline >= $dNeeded) $final = 'declined';
+    $flowAfter = flow_state($pdo, (int)$id);
+    $final = in_array($flowAfter['stage'], ['approved', 'declined'], true) ? $flowAfter['stage'] : null;
+    $approve = $decline = $needed = $dNeeded = 0;
 
     // "OSAS", "Academic Affairs", ... — the office that cast this vote.
     $who = ($admin['office'] ?? '') && $admin['office'] !== 'Admin' ? $admin['office'] : ($admin['display_name'] ?? 'Admin');
@@ -287,30 +311,24 @@ if (method() === 'POST') {
             ->execute([$final, $declineReason, $id]);
     }
 
-    // ---- Tell the student about THIS admin's vote (and the final result, if there is one) ----
-    if ($previousVote !== $action) {
-        if ($action === 'approve') {
-            $msg = "{$who} approved {$label}. ($approve of $needed approvals needed)";
-            if ($reason) $msg .= " Comment: {$reason}";
-            if ($final === 'approved') $msg .= " All {$needed} approvals reached — your reservation is now APPROVED.";
-            notify_student($res['student_id'], $msg);
-        } else {
-            $msg = "{$who} declined {$label}. Reason: {$reason}";
-            if ($final === 'declined') $msg .= " Majority reached — your reservation is now DECLINED.";
-            notify_student($res['student_id'], $msg);
-        }
-    } elseif ($final) {
-        // Same vote re-sent but it happened to tip the result — still announce the outcome.
-        notify_student($res['student_id'], $final === 'approved'
-            ? "Good news! {$label} has been approved ({$needed} approvals reached)."
-            : "{$label} has been declined. Reason: {$declineReason}");
+    // ---- Tell the student where the request is in the sequence ----
+    $roleLabel = FLOW_LABEL[$myRole];
+    if ($action === 'approve') {
+        $msg = "{$roleLabel} approved {$label}.";
+        if ($reason) $msg .= " Comment: {$reason}";
+        if ($final === 'approved')                $msg .= " OSAS gave the final approval — your reservation is now APPROVED.";
+        elseif ($flowAfter['stage'] === 'osas')   $msg .= " It now goes to OSAS for the final approval.";
+        else                                       $msg .= ' ' . $flowAfter['waiting_for'] . '.';
+    } else {
+        $msg = "{$roleLabel} declined {$label}. Reason: {$reason} Your reservation is now DECLINED.";
     }
+    notify_student($res['student_id'], $msg);
     $pdo->commit();
 
-    $message = $final
-        ? "Decision reached ($approve approve / $decline decline) – reservation $final."
-        : "Your vote was recorded ($approve of $needed approvals, $decline of $dNeeded declines).";
-    respond(true, ['status' => $final ?? 'pending', 'approve' => $approve, 'decline' => $decline, 'needed' => $needed, 'declines_needed' => $dNeeded], $message);
+    $message = $final === 'approved' ? 'Final approval given – reservation approved.'
+             : ($final === 'declined' ? 'Reservation declined.'
+             : ($flowAfter['stage'] === 'osas' ? 'Approved – it now goes to OSAS for the final approval.' : 'Approved. ' . $flowAfter['waiting_for'] . '.'));
+    respond(true, ['status' => $final ?? 'pending', 'stage' => $flowAfter['stage']], $message);
 }
 
 respond(false, null, 'Method not allowed', 405);

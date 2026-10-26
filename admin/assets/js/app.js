@@ -229,23 +229,24 @@ const pages = {
     title: 'Approval Queue',
     filter: 'pending',
     async render() {
-      const { rows, approvals_needed, declines_needed } = await api.get(`reservations.php${this.filter === 'all' ? '' : '?status=' + this.filter}`);
+      const { rows, my_role } = await api.get(`reservations.php?queue=1${this.filter === 'all' ? '' : '&status=' + this.filter}`);
       this.rows = rows;
-      this.approvalsNeeded = approvals_needed;
+      this.myRole = my_role;
       return `
         <div class="card">
           <div class="card__head">
             ${tabs(['pending', 'approved', 'declined', 'completed', 'cancelled', 'all'], this.filter)}
-            <span class="vote-rule"><strong>${approvals_needed}</strong> approvals approve · <strong>${declines_needed}</strong> declines decline · you can undo your vote</span>
+            <span class="vote-rule">Administration <strong>and</strong> Academic Affairs approve first → <strong>OSAS</strong> makes the final decision (approve, or decline with a reason) · oldest submission first (first come, first served) · you can undo your decision</span>
           </div>
           <div class="table-wrap"><table class="resp-table queue-table">
-            <thead><tr><th>Request</th><th>Nature of Activity</th><th>Venue &amp; Schedule</th><th>Requested By</th><th>Form</th><th>Status</th><th>Votes</th><th>Your Vote</th></tr></thead>
-            <tbody>${rows.length ? rows.map((r) => `
+            <thead><tr><th>Request</th><th>Nature of Activity</th><th>Venue &amp; Schedule</th><th>Requested By</th><th>Form</th><th>Status</th><th>Approval Sequence</th><th>Your Action</th></tr></thead>
+            <tbody>${rows.length ? rows.map((r, i) => `
               <tr>
                 <td class="q-title" data-label="Request">
+                  ${this.filter === 'pending' ? `<span class="q-pos" title="First come, first served — oldest submission first">${i === 0 ? 'First in line' : '#' + (i + 1) + ' in line'}</span>` : ''}
                   <strong class="q-name" title="${esc(r.event_name)}">${esc(r.event_name)}</strong>
                   <div class="sub muted">${esc(r.ref_no)}</div>
-                  ${r.created_at ? `<div class="sub muted">Submitted ${esc(fmtDate(r.created_at))}</div>` : ''}
+                  ${r.submitted_date ? `<div class="sub q-sub">🕒 Submitted ${esc(r.submitted_date)} · ${esc(r.submitted_time)}</div>` : ''}
                 </td>
                 <td class="cell-wrap" data-label="Nature of Activity" data-nature="${esc(csv(r.nature_of_activity).join('|'))}">${esc(natureText(r))}</td>
                 <td data-label="Venue &amp; Schedule">
@@ -260,9 +261,9 @@ const pages = {
                 </td>
                 <td data-label="Form">${formButton(r)}</td>
                 <td data-label="Status">${statusCell(r)}</td>
-                <td data-label="Votes">${voteTally(r, approvals_needed, declines_needed)}${messageButton(r)}</td>
+                <td data-label="Approval Sequence">${flowSteps(r)}${messageButton(r)}</td>
                 <td class="q-actions" data-label="Your Vote"><div class="actions">${voteButtons(r)}</div></td>
-              </tr>`).join('') : emptyRow(8, 'The queue is empty.')}
+              </tr>`).join('') : emptyRow(8, this.myRole === 'osas' && this.filter === 'pending' ? 'Nothing is waiting for OSAS yet — requests appear here after Administration and Academic Affairs approve them.' : 'The queue is empty.')}
             </tbody></table></div>
         </div>`;
     },
@@ -271,7 +272,7 @@ const pages = {
       bindRowActions(root);
       root.addEventListener('click', (e) => {
         const m = e.target.closest('[data-msg]');
-        if (m) openVoteMessages(this.rows.find((r) => String(r.id) === m.dataset.msg), this.approvalsNeeded);
+        if (m) openVoteMessages(this.rows.find((r) => String(r.id) === m.dataset.msg));
       });
       root.addEventListener('click', async (e) => {
         const b = e.target.closest('[data-act]');
@@ -285,7 +286,7 @@ const pages = {
           reason = await approveCommentBox();
           if (reason === null) return; // cancelled – no vote is cast
         } else if (act === 'undo') {
-          if (!(await confirmBox('Undo your vote on this reservation? If it was already approved or declined, it goes back to pending when the remaining votes no longer decide it.', 'Undo my vote'))) return;
+          if (!(await confirmBox('Undo your decision on this reservation? If it was already approved or declined, it goes back to pending and the sequence continues from your step.', 'Undo my decision'))) return;
         }
         run(api.post(`reservations.php?action=${act}`, { id: b.dataset.id, reason }));
       });
@@ -768,7 +769,7 @@ const pages = {
               <td data-label="Submitted By">${esc(r.prepared_by)}</td>
               <td data-label="Review"><span class="badge badge--${reviewTone[r.review_status] || 'completed'}">${esc(reviewLabel[r.review_status] || r.review_status)}</span></td>
               <td class="q-actions" data-label="Action"><div class="actions">
-                <button class="btn btn--sm ${r.review_status === 'pending' ? 'btn--primary' : 'btn--outline'}" data-report="${r.id}">${r.review_status === 'pending' ? 'Review' : 'View'}</button>
+                <button class="btn btn--sm ${r.review_status === 'pending' ? 'btn--primary' : 'btn--outline'}" data-report="${r.id}">${r.review_status === 'pending' && session.is_osas ? 'Review' : 'View'}</button>
                 <a class="btn btn--sm btn--ghost" href="api/report_pdf.php?id=${r.id}" title="Download this report as PDF">PDF</a>
                 ${r.review_status === 'approved' && session.can_clearance ? `<a class="btn btn--sm btn--ghost" href="api/clearance_pdf.php?report_id=${r.id}" title="Download the activity clearance">Clearance</a>` : ''}
               </div></td>
@@ -808,8 +809,9 @@ const pages = {
               <label>Name<input name="approver2_name" value="${esc(sg.approver2_name)}" maxlength="150" required></label>
               <label>Position<input name="approver2_title" value="${esc(sg.approver2_title)}" maxlength="150" required></label>
               <b>Noted by</b>
-              <label>Name<input name="noted_name" value="${esc(sg.noted_name)}" maxlength="150" required></label>
-              <label>Position<input name="noted_title" value="${esc(sg.noted_title)}" maxlength="150" required></label>
+              ${session.is_osas ? '' : '<p class="muted" style="margin:0">Only OSAS can change “Noted by”.</p>'}
+              <label>Name<input name="noted_name" value="${esc(sg.noted_name)}" maxlength="150" required ${session.is_osas ? '' : 'readonly'}></label>
+              <label>Position<input name="noted_title" value="${esc(sg.noted_title)}" maxlength="150" required ${session.is_osas ? '' : 'readonly'}></label>
               <div class="form-actions"><button class="btn btn--primary">Save Signatories</button></div>
             </form>
           </div>
@@ -1077,7 +1079,7 @@ async function openReportView(reportId) {
         <span><strong>Sent back for revision:</strong> ${esc(r.review_remarks)}</span></div>`
     : '';
 
-  const reviewActions = r.review_status === 'pending' ? `
+  const reviewActions = r.review_status === 'pending' && session.is_osas ? `
     <div class="review-actions">
       <div class="review-actions__head">This report is awaiting your review.</div>
       <textarea id="reviewRemarks" rows="2" placeholder="Remarks for the student (required only if sending it back)"></textarea>
@@ -1338,13 +1340,17 @@ function tabs(list, active) {
 function bindTabs(root, page) {
   $$('[data-tab]', root).forEach((b) => (b.onclick = () => { page.filter = b.dataset.tab; render(); }));
 }
-function voteTally(r, needed, declineNeeded) {
-  const who = r.voters.map((v) => `${v.name}: ${v.vote}${v.vote === 'decline' && v.reason ? ' — ' + v.reason : ''}`).join('\n') || 'No votes yet';
-  const pct = (n) => Math.min(100, (n / needed) * 100);
-  return `<div class="tally" title="${esc(who)}">
-    <div class="tally__row"><span class="tally__lbl ok">✓ ${r.approve_count}</span><div class="tally__track"><div class="tally__fill ok" style="width:${pct(r.approve_count)}%"></div></div></div>
-    <div class="tally__row"><span class="tally__lbl no">✗ ${r.decline_count}</span><div class="tally__track"><div class="tally__fill no" style="width:${Math.min(100, (r.decline_count / (declineNeeded || needed)) * 100)}%"></div></div></div>
-  </div>`;
+/** The approval sequence: Administration → Academic Affairs → OSAS, each with its own state. */
+function flowSteps(r) {
+  const f = r.flow || {};
+  const icon = { approved: '✓', declined: '✗', pending: '•', waiting: '🔒', skipped: '–' };
+  const txt = { approved: 'Approved', declined: 'Declined', pending: 'Pending', waiting: 'Waiting', skipped: 'Not needed' };
+  const row = (k) => {
+    const st = f[k] || { state: 'pending' };
+    const tip = [st.by, st.at, st.reason].filter(Boolean).join(' · ');
+    return `<div class="flow__row flow__row--${st.state}" title="${esc(tip)}"><span class="flow__ic">${icon[st.state]}</span><span class="flow__txt"><b>${esc(st.label || k)}</b><small>${txt[st.state]}</small></span></div>`;
+  };
+  return `<div class="flow">${row('admin')}${row('academic')}<div class="flow__arrow">↓ then</div>${row('osas')}</div>`;
 }
 /**
  * "Mark done" is now only an early override — an event whose end time has
@@ -1363,11 +1369,12 @@ function reservationAction(r) {
     ? `<button class="btn btn--sm btn--outline" data-att="${r.id}" title="QR attendance for this event">Attendance</button>`
     : '';
   if (r.status === 'approved') {
+    if (!session.is_osas) return att || '<span class="muted">—</span>';   // Mark done is OSAS-only
     return att + `<button class="btn btn--sm btn--outline" data-act="complete" data-id="${r.id}" title="End this event early and mark it done now">Mark done</button>`;
   }
   if (r.status === 'completed') {
     if (!r.report_id) return att + '<span class="muted">Awaiting student submission</span>';
-    if (r.report_review_status === 'pending') {
+    if (r.report_review_status === 'pending' && session.is_osas) {
       return att + `<button class="btn btn--sm btn--primary" data-report="${r.report_id}">Review report</button>`;
     }
     if (r.report_review_status === 'needs_revision') {
@@ -1385,10 +1392,9 @@ function messageButton(r) {
 }
 
 /** Popup: one card per admin who voted — name, Approved/Declined, comment, date and time. */
-function openVoteMessages(r, needed) {
+function openVoteMessages(r) {
   if (!r) return;
   const votes = r.voters || [];
-  const approvals = votes.filter((v) => v.vote === 'approve').length;
   const body = votes.length
     ? `<div class="vmsg-list">${votes.map((v) => `
         <div class="vmsg ${v.vote === 'approve' ? 'vmsg--ok' : 'vmsg--no'}">
@@ -1400,20 +1406,22 @@ function openVoteMessages(r, needed) {
     : '<p class="muted">No admin has voted on this reservation yet.</p>';
   openModal('Messages', `
     <p style="margin:0 0 4px"><strong>${esc(r.event_name)}</strong> <span class="muted">· ${esc(r.ref_no)}</span> ${badge(r.status)}</p>
-    <p class="muted" style="margin:0 0 12px">${approvals} of ${needed} approvals</p>
+    <p class="muted" style="margin:0 0 12px">${esc(r.status === 'approved' ? 'Fully approved' : r.status === 'declined' ? 'Declined' : (r.waiting_for || ''))}</p>
     ${body}
     <div class="form-actions"><button class="btn btn--ghost" data-close>Close</button></div>`);
 }
 
 function voteButtons(r) {
   const undo = r.can_undo
-    ? `<button class="btn btn--sm btn--outline" data-act="undo" data-id="${r.id}" title="Take back your vote">↶ Undo</button>` : '';
+    ? `<button class="btn btn--sm btn--outline" data-act="undo" data-id="${r.id}" title="Take back your decision">↶ Undo</button>` : '';
   if (r.my_vote) {
     return `<span class="muted">${r.my_vote === 'approve' ? '✓ You approved' : '✗ You declined'}</span> ${undo}`;
   }
   if (r.status !== 'pending') return '<span class="muted">Closed</span>';
-  return `<button class="btn btn--sm btn--primary" data-act="approve" data-id="${r.id}">Approve</button>
-          <button class="btn btn--sm btn--danger" data-act="decline" data-id="${r.id}">Decline</button>`;
+  if (!r.my_role) return '<span class="muted">Not in the sequence</span>';
+  if (!r.my_turn) return `<span class="muted">🔒 ${esc(r.waiting_for || 'Waiting')}</span>`;
+  return `<button class="btn btn--sm btn--primary" data-act="approve" data-id="${r.id}">${r.my_role === 'osas' ? 'Final approve' : 'Approve'}</button>
+          <button class="btn btn--sm btn--danger" data-act="decline" data-id="${r.id}">${r.my_role === 'osas' ? 'Final decline' : 'Decline'}</button>`;
 }
 
 /* ---------- table search + pagination (5 rows per page) ---------- */
@@ -1565,13 +1573,13 @@ async function render() {
 
 async function refreshCounts() {
   try {
-    const [acc, res] = await Promise.all([api.get('accounts.php?status=pending'), api.get('reservations.php?status=pending')]);
-    api.get('reschedules.php?status=pending', { silent: true }).then((rs) => {
+    const [acc, res] = await Promise.all([api.get('accounts.php?status=pending'), api.get('reservations.php?status=pending&queue=1')]);
+    if (session.is_osas) api.get('reschedules.php?status=pending', { silent: true }).then((rs) => {
       const el = $('#rsCount'); el.textContent = rs.length; el.hidden = !rs.length;
     }).catch(() => {});
     const set = (id, n) => { const el = $(id); el.textContent = n; el.hidden = !n; };
     set('#accCount', acc.length);
-    set('#resCount', res.rows.filter((r) => !r.my_vote).length);
+    set('#resCount', res.rows.filter((r) => r.my_turn).length);
   } catch { /* ignore */ }
 }
 
@@ -1591,6 +1599,13 @@ function paintSession() {
     return; // api.js redirects to login
   }
   paintSession();
+  // Reschedule Requests, Inventory and Users are OSAS-only: hide them for Administration / Academic Affairs.
+  const OSAS_ONLY = ['reschedules', 'inventory', 'users'];
+  if (!session.is_osas) {
+    OSAS_ONLY.forEach((p) => { const a = document.querySelector(`.nav a[data-page="${p}"]`); if (a) a.hidden = true; });
+    if (OSAS_ONLY.includes(location.hash.slice(1))) location.hash = '#dashboard';
+    window.addEventListener('hashchange', () => { if (OSAS_ONLY.includes(location.hash.slice(1))) location.hash = '#dashboard'; });
+  }
 
   $('#menuBtn').onclick = () => $('#sidebar').classList.toggle('open');
   $('#logoutBtn').onclick = async (e) => {

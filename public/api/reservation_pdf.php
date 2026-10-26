@@ -17,6 +17,7 @@ if (!isset($_SESSION['user_id'])) {
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../../admin/includes/pdf.php';
 require_once __DIR__ . '/../../shared/signatories.php';
+require_once __DIR__ . '/../../shared/esignatures.php';
 
 $id = filter_var($_GET['id'] ?? null, FILTER_VALIDATE_INT);
 if (!$id) {
@@ -51,6 +52,15 @@ $rs->execute([$id]);
 $resources = $rs->fetchAll(PDO::FETCH_ASSOC);
 $sig = get_signatories($pdo);
 
+// E-signatures the admins placed by approving this reservation (empty if the feature isn't set up).
+$esigs = []; $esigImg = [];
+try {
+    foreach (esig_for_reservation($pdo, (int) $id) as $k => $row) { $esigs[$k] = $row; $esigImg[$k] = esig_pdf_image($row['signature']); }
+} catch (Throwable $e) { /* printed without signatures */ }
+$esigNote = function (string $k) use ($esigs): ?string {
+    return isset($esigs[$k]) ? 'E-SIGNED ' . esig_format_date($esigs[$k]['signed_at']) : null;
+};
+
 /* ---------- drawing helpers (form style) ---------- */
 const INK = '#111111';
 const SOFT = '#555555';
@@ -84,7 +94,8 @@ function sig(SimplePdf $p, float $x, float $y, float $w, string $name, string $t
     $p->textAt($x, $y + 14, $title, 6.8, '', INK, $w, 'center');
     if ($extra !== '') $p->textAt($x, $y + 23, $extra, 6.5, 'I', '#2f8a61', $w, 'center');
 }
-function pline(SimplePdf $p, float $x, float $y, float $w, string $name, string $cap1, string $cap2): void {
+function pline(SimplePdf $p, float $x, float $y, float $w, string $name, string $cap1, string $cap2, ?array $img = null): void {
+    if ($img) $p->drawImage($img, $x + ($w - 130) / 2, $y - 26, 130, 30);   // drawn signature sits on the line
     $p->textAt($x, $y, $name === '' ? ' ' : $name, 9, '', '#1f3f8a', $w, 'center');
     $p->hline($x, $y + 12, $w, INK, 0.6);
     $p->textAt($x, $y + 15, $cap1, 6.5, '', INK, $w, 'center');
@@ -158,33 +169,38 @@ $t = $row($oh); lbl($pdf, $L + 8, $t + 6, 'Objectives of the Activity:');
 foreach ($objLines as $k => $ln) $pdf->textAt($L + 8, $t + 17 + $k * 12, $ln, 9, '', '#1f3f8a');
 
 // ---- certify / approvals block ----
-$bh = 170;
+$bh = 208;
 $t = $row($bh); vline($pdf, $M, $t, $bh);
 $lw = $M - $L - 16;
 $cert = $pdf->wrap('I HEREBY CERTIFY THAT THIS ACTIVITY is necessary to provide students new avenue of knowledge and experiences. Report of this activity and liquidation of expenses (if any) shall be made available after the conduct of activity.', $lw, 6.8);
 foreach ($cert as $k => $ln) $pdf->textAt($L + 8, $t + 6 + $k * 9, $ln, 6.8, '', INK);
 $adv = trim((string) ($r['adviser_name'] ?: $r['requested_by']));
-pline($pdf, $L + 8, $t + 40, $lw, $adv, 'Signature over printed name', 'CLUB / ORGANIZATION / ADVISER');
-$pdf->textAt($L + 8, $t + 76, 'Recommending Approval:', 7.5, 'B', INK);
-pline($pdf, $L + 8, $t + 90, $lw, (string) $r['recommending_name'], 'Signature over printed name', 'Program Coordinator / Program Chairman / Dean');
-lbl($pdf, $L + 8, $t + 126, 'Remarks:');
-val($pdf, $L + 8, $t + 136, (string) $r['remarks'], $lw);
-$pdf->hline($L + 8, $t + 147, $lw, INK, 0.5);
-$pdf->hline($L + 8, $t + 158, $lw, INK, 0.5);
+$advImg = $recImg = null;
+try { $advImg = esig_pdf_image($r['adviser_signature'] ?? null); $recImg = esig_pdf_image($r['recommending_signature'] ?? null); } catch (Throwable $e) { /* print without */ }
+pline($pdf, $L + 8, $t + 68, $lw, $adv, 'Signature over printed name', 'CLUB / ORGANIZATION / ADVISER', $advImg);
+$pdf->textAt($L + 8, $t + 104, 'Recommending Approval:', 7.5, 'B', INK);
+pline($pdf, $L + 8, $t + 138, $lw, (string) $r['recommending_name'], 'Signature over printed name', 'Program Coordinator / Program Chairman / Dean', $recImg);
+lbl($pdf, $L + 8, $t + 172, 'Remarks:');
+val($pdf, $L + 8, $t + 182, (string) $r['remarks'], $lw);
+$pdf->hline($L + 8, $t + 193, $lw, INK, 0.5);
+$pdf->hline($L + 8, $t + 204, $lw, INK, 0.5);
 
 // right column: Approved by / Noted by
 $rw = $R - $M - 12; $rx = $M + 6;
 hl($pdf, $M, $t + 100, $R - $M);
+foreach (['approver1' => 24, 'approver2' => 62, 'noted' => 132] as $k => $ny) {   // signature images first, text on top
+    if (!empty($esigImg[$k])) $pdf->drawImage($esigImg[$k], $rx + ($rw - 120) / 2, $t + $ny - 18, 120, 32);
+}
 $pdf->textAt($rx, $t + 6, 'Approved by:', 7.5, 'B', INK);
 $a1n = $r['approver1_name'] ?: $sig['approver1_name'];
 $a1t = $r['approver1_title'] ?: $sig['approver1_title'];
 $a2n = $r['approver2_name'] ?: $sig['approver2_name'];
 $a2t = $r['approver2_title'] ?: $sig['approver2_title'];
 $st = function ($s, $d) { $s = strtolower((string) $s); if ($s !== 'approved') return ''; return 'APPROVED' . ($d ? '  ' . fd($d) : ''); };
-sig($pdf, $rx, $t + 24, $rw, (string) $a1n, (string) $a1t, $st($r['approver1_status'], $r['approver1_date']));
-sig($pdf, $rx, $t + 62, $rw, (string) $a2n, (string) $a2t, $st($r['approver2_status'], $r['approver2_date']));
+sig($pdf, $rx, $t + 24, $rw, (string) $a1n, (string) $a1t, $esigNote('approver1') ?? $st($r['approver1_status'], $r['approver1_date']));
+sig($pdf, $rx, $t + 62, $rw, (string) $a2n, (string) $a2t, $esigNote('approver2') ?? $st($r['approver2_status'], $r['approver2_date']));
 $pdf->textAt($rx, $t + 106, 'Noted by:', 7.5, 'B', INK);
-sig($pdf, $rx, $t + 132, $rw, (string) $sig['noted_name'], (string) $sig['noted_title']);
+sig($pdf, $rx, $t + 132, $rw, (string) $sig['noted_name'], (string) $sig['noted_title'], $esigNote('noted') ?? '');
 
 // ---- attachments ----
 $checked = json_decode((string) $r['attachments_checklist'], true);

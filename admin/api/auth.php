@@ -35,6 +35,7 @@ switch ($action) {
         $me = require_auth();
         require_once __DIR__ . '/../../shared/clearance_access.php';
         $me['can_clearance'] = admin_can_download_clearance($me);
+        $me['is_osas'] = $me['can_clearance'];   // OSAS-only: reschedules, inventory, users, mark done, report review, clearance
         respond(true, $me);
 
     default:

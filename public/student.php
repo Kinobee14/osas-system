@@ -223,6 +223,7 @@ $reservationsForJs = array_map(function ($r) use ($votesByReservation, $resource
             'participants' => $r['participants'] ? (int)$r['participants'] : null,
             'sponsor' => $r['sponsoring_org'], 'fund' => $r['source_of_fund'],
             'adviser' => $r['adviser_name'], 'recommending' => $r['recommending_name'],
+            'adviserSig' => $r['adviser_signature'] ?? null, 'recommendingSig' => $r['recommending_signature'] ?? null,
             'remarks' => $r['remarks'], 'checklist' => $r['attachments_checklist'],
         ],
         'declineReason' => $r['decline_reason'] ?? null,
@@ -980,6 +981,18 @@ table.cal td.past-day{color:#c9c2ac;background:transparent;}
 .skel--title{height:18px;width:55%;} .skel--w80{width:80%;} .skel--w60{width:60%;}
 @keyframes skel-shimmer{to{transform:translateX(100%);}}
 @media (prefers-reduced-motion:reduce){.skel::after{animation:none;}}
+.sig-box{min-height:54px;display:flex;align-items:flex-end;justify-content:center;}
+.sig-box img{max-height:54px;max-width:100%;display:block;}
+.sig-actions{display:flex;gap:6px;justify-content:center;margin:4px 0 2px;}
+.sig-modal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;}
+.sig-modal[hidden]{display:none;}
+.sig-card{background:#fff;border-radius:12px;padding:16px;width:min(520px,100%);box-shadow:0 10px 40px rgba(0,0,0,.3);}
+.sig-card h3{margin:0 0 4px;font-size:1rem;}
+.sig-card p{margin:0 0 10px;font-size:.8rem;color:#555;}
+.sig-pad{border:1px dashed #888;border-radius:8px;background:#fff;width:100%;height:200px;touch-action:none;cursor:crosshair;display:block;}
+.sig-card .row{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;}
+.sig-card .row button{border-radius:8px;padding:8px 16px;font-weight:700;font-family:inherit;cursor:pointer;border:1px solid #bbb;background:#fff;}
+.sig-card .row button.primary{background:#1f6b3a;color:#fff;border-color:transparent;}
 </style>
 </head>
 <body>
@@ -1078,7 +1091,7 @@ const studentUser = {
   campus: <?= json_encode($user['campus']) ?>
 };
 let reservationsData = <?= json_encode($reservationsForJs, JSON_UNESCAPED_SLASHES) ?>;
-const APPROVALS_NEEDED = <?= (int)approvals_needed($pdo) ?>;
+const APPROVAL_STEPS = 3;   // Administration, Academic Affairs, OSAS (final)
 // "Approved by" / "Noted by" names + positions, set by the admins (Settings page).
 const SIGNATORIES = <?= json_encode(get_signatories($pdo), JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 let notificationsData = <?= json_encode($notificationsForJs, JSON_UNESCAPED_SLASHES) ?>;
@@ -1162,7 +1175,7 @@ const NOTIF_TYPES = [
   ['res_declined',      /your reservation is now DECLINED\.|\) has been declined\. Reason:/,  'Reservation declined',            'bad'],
   ['vote_approved',     /^.+? approved Your reservation "/,                                   'Approval received',                'ok'],
   ['vote_declined',     /^.+? declined Your reservation "/,                                   'Decline received',                 'bad'],
-  ['res_submitted',     /has been submitted.* and is pending OSAS approval\./,                'Reservation submitted',            'info'],
+  ['res_submitted',     /has been submitted.* and is pending approval/,                'Reservation submitted',            'info'],
   ['res_updated',       /was updated and (resubmitted|is still pending)/,                     'Reservation updated',              'info'],
   ['res_cancelled',     /\) has been cancelled\./,                                            'Reservation cancelled',            'warn'],
   ['event_done',        /has finished, so the reservation is now marked Done|has been marked completed\./, 'Event finished',     'info'],
@@ -1458,7 +1471,7 @@ function openReservationMessage(index){
     <h2>Messages</h2>
     <p class="m-sub">${escapeHtml(r.ref)} · ${escapeHtml(r.event)}
       &nbsp;<span class="badge ${badgeClass(r.status)}">${badgeLabel(r.status)}</span></p>
-    <p class="m-sub" style="margin-top:-6px">${approvals} of ${APPROVALS_NEEDED} approvals</p>
+    <p class="m-sub" style="margin-top:-6px">${approvals} of ${APPROVAL_STEPS} approval steps · Administration → Academic Affairs → OSAS (final)</p>
     ${body}
     <div style="display:flex;justify-content:flex-end;margin-top:14px;">
       <button class="btn" style="background:#eee;" onclick="closeStuModal()">Close</button>
@@ -2011,11 +2024,13 @@ function renderNewReservationPage(main, showSuccess){
             <div class="left">
               <p style="margin:0;"><b>I HEREBY CERTIFY THAT THIS ACTIVITY</b> is necessary to provide students new avenue of knowledge and experiences. Report of this activity and liquidation of expenses (if any) shall be made available after the conduct of activity.</p>
               <div class="sigline">
+                ${sigBlock('adviser')}
                 <input class="u-in" type="text" id="rAdviser" maxlength="150" placeholder="Printed name" style="width:100%;text-align:center;">
                 <small>Signature over printed name<br>CLUB / ORGANIZATION / ADVISER</small>
               </div>
               <h4 style="margin-top:18px;">Recommending Approval:</h4>
               <div class="sigline" style="margin-top:8px;">
+                ${sigBlock('recommending')}
                 <input class="u-in" type="text" id="rRecommending" maxlength="150" placeholder="Printed name" style="width:100%;text-align:center;">
                 <small>Signature over printed name<br>Program Coordinator / Program Chairman / Dean</small>
               </div>
@@ -2100,7 +2115,9 @@ function renderNewReservationPage(main, showSuccess){
   initRequirementPicker();
   initFormAvail();
   applyBookingPrefill();
+  formSigs.adviser = ''; formSigs.recommending = '';
   if(editR) applyEditPrefill(editR);
+  sigRefresh('adviser'); sigRefresh('recommending');
 }
 
 /* ---- Edit a pending / declined reservation ---- */
@@ -2117,6 +2134,95 @@ function cancelEditReservation(){
   editingReservationId = null;
   navigateStudent('myReservations');
 }
+/* ---- Hand-drawn e-signatures (Adviser / Recommending) ---- */
+const formSigs = { adviser: '', recommending: '' };
+const SIG_LABEL = { adviser: 'Club / Organization / Adviser', recommending: 'Recommending Approval' };
+function sigBlock(key){
+  return `<div class="sig-box" id="sigBox_${key}"></div>
+    <div class="sig-actions">
+      <button type="button" class="att-btn" id="sigBtn_${key}" onclick="openSigPad('${key}')">✍ Sign</button>
+      <button type="button" class="att-btn" id="sigClr_${key}" onclick="clearSig('${key}')" hidden>Remove</button>
+    </div>`;
+}
+function sigRefresh(key){
+  const box = document.getElementById('sigBox_' + key); if(!box) return;
+  const v = formSigs[key];
+  box.innerHTML = v ? `<img alt="Signature" src="${v}">` : '';
+  document.getElementById('sigBtn_' + key).textContent = v ? '✍ Re-sign' : '✍ Sign';
+  document.getElementById('sigClr_' + key).hidden = !v;
+}
+function clearSig(key){ formSigs[key] = ''; sigRefresh(key); }
+let sigPadKey = null, sigDrew = false;
+function ensureSigModal(){
+  let m = document.getElementById('sigModal');
+  if(m) return m;
+  m = document.createElement('div');
+  m.id = 'sigModal'; m.className = 'sig-modal'; m.hidden = true;
+  m.innerHTML = `<div class="sig-card" role="dialog" aria-modal="true">
+      <h3>Draw your signature</h3><p id="sigPadFor"></p>
+      <canvas id="sigPad" class="sig-pad"></canvas>
+      <div class="row">
+        <button type="button" onclick="closeSigPad()">Cancel</button>
+        <button type="button" onclick="sigPadClear()">Clear</button>
+        <button type="button" class="primary" onclick="sigPadSave()">Save signature</button>
+      </div></div>`;
+  document.body.appendChild(m);
+  const c = m.querySelector('canvas');
+  let down = false, lx = 0, ly = 0;
+  const pos = e => { const r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  c.addEventListener('pointerdown', e => {
+    down = true; [lx, ly] = pos(e); c.setPointerCapture(e.pointerId);
+    const g = c.getContext('2d'); g.beginPath(); g.arc(lx, ly, 1.1, 0, 6.3); g.fill(); sigDrew = true; e.preventDefault();
+  });
+  c.addEventListener('pointermove', e => {
+    if(!down) return;
+    const g = c.getContext('2d'), [x, y] = pos(e);
+    g.beginPath(); g.moveTo(lx, ly); g.lineTo(x, y); g.stroke(); lx = x; ly = y; e.preventDefault();
+  });
+  ['pointerup','pointercancel','pointerleave'].forEach(t => c.addEventListener(t, () => { down = false; }));
+  m.addEventListener('click', e => { if(e.target === m) closeSigPad(); });
+  return m;
+}
+function sigPadClear(){
+  const c = document.getElementById('sigPad'), g = c.getContext('2d');
+  g.setTransform(1,0,0,1,0,0); g.clearRect(0, 0, c.width, c.height);
+  const k = c.width / c.clientWidth;
+  g.scale(k, k); g.lineWidth = 2.2; g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = '#111'; g.fillStyle = '#111';
+  sigDrew = false;
+}
+function openSigPad(key){
+  sigPadKey = key;
+  const m = ensureSigModal(); m.hidden = false;
+  document.getElementById('sigPadFor').textContent = 'Sign inside the box using your mouse, finger or stylus — ' + SIG_LABEL[key] + '.';
+  const c = document.getElementById('sigPad'), k = window.devicePixelRatio || 1;
+  c.width = Math.round(c.clientWidth * k); c.height = Math.round(c.clientHeight * k);
+  sigPadClear();
+  if(formSigs[key]){   // show the existing one so it can be kept or redrawn
+    const img = new Image();
+    img.onload = () => { c.getContext('2d').drawImage(img, 0, 0, c.clientWidth, c.clientHeight); sigDrew = true; };
+    img.src = formSigs[key];
+  }
+}
+function closeSigPad(){ const m = document.getElementById('sigModal'); if(m) m.hidden = true; sigPadKey = null; }
+function sigPadSave(){
+  if(!sigDrew){ alert('Please draw your signature first.'); return; }
+  const c = document.getElementById('sigPad');
+  // Trim blank margins so the signature fills its slot in the PDF.
+  const g = c.getContext('2d'), w = c.width, h = c.height, d = g.getImageData(0, 0, w, h).data;
+  let x0 = w, y0 = h, x1 = 0, y1 = 0;
+  for(let y = 0; y < h; y++) for(let x = 0; x < w; x++) if(d[(y*w + x)*4 + 3] > 8){ if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; }
+  if(x1 <= x0 || y1 <= y0){ alert('Please draw your signature first.'); return; }
+  const pad = 6; x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(w - 1, x1 + pad); y1 = Math.min(h - 1, y1 + pad);
+  const out = document.createElement('canvas'); out.width = x1 - x0 + 1; out.height = y1 - y0 + 1;
+  out.getContext('2d').drawImage(c, x0, y0, out.width, out.height, 0, 0, out.width, out.height);
+  let url = out.toDataURL('image/png');
+  if(url.length > 350000){   // very large screens: shrink to keep the upload small
+    const s = document.createElement('canvas'), f = 0.5; s.width = Math.round(out.width*f); s.height = Math.round(out.height*f);
+    s.getContext('2d').drawImage(out, 0, 0, s.width, s.height); url = s.toDataURL('image/png');
+  }
+  formSigs[sigPadKey] = url; sigRefresh(sigPadKey); closeSigPad();
+}
+
 function applyEditPrefill(r){
   const f = r.form || {};
   const setRadio = (name, val) => { const el = [...document.querySelectorAll(`input[name="${name}"]`)].find(x => x.value === val); if(el) el.checked = true; return !!el; };
@@ -2136,6 +2242,7 @@ function applyEditPrefill(r){
   }
   sv('rPurpose', r.purpose || '');
   sv('rAdviser', f.adviser || ''); sv('rRecommending', f.recommending || ''); sv('rRemarks', f.remarks || '');
+  formSigs.adviser = f.adviserSig || ''; formSigs.recommending = f.recommendingSig || '';
   // Checklist: tick items that were submitted, and show the picture already on file.
   const onFile = {};
   (r.files || []).forEach(x => { if(x.label) onFile[x.label] = x; });
@@ -2560,6 +2667,10 @@ async function submitReservation(e){
   if(!fundType) return showErr('Please choose the Source of Fund.');
   if(fundType === 'Others' && !fundOther) return showErr('Please specify the "Others" source of fund.', 'rFundOther');
   if(!purpose) return showErr('Please enter the Objectives of the Activity.', 'rPurpose');
+  if(!adviser) return showErr('Please enter the printed name for Club / Organization / Adviser.', 'rAdviser');
+  if(!formSigs.adviser) return showErr('Please sign over the printed name for Club / Organization / Adviser (tap the Sign button).', 'sigBtn_adviser');
+  if(!recommending) return showErr('Please enter the printed name for Recommending Approval.', 'rRecommending');
+  if(!formSigs.recommending) return showErr('Please sign over the printed name for Recommending Approval (tap the Sign button).', 'sigBtn_recommending');
 
   // Frontend overlap check against the availability we just loaded (the server re-checks anyway).
   const editR = editingReservationId ? reservationsData.find(x => x.id === editingReservationId) : null;
@@ -2612,6 +2723,8 @@ async function submitReservation(e){
     body.append('source_of_fund', fund);
     body.append('adviser_name', adviser);
     body.append('recommending_name', recommending);
+    body.append('adviser_signature', formSigs.adviser);
+    body.append('recommending_signature', formSigs.recommending);
     body.append('remarks', remarks);
     body.append('attachments_checklist', JSON.stringify(attach));
     body.append('resources', JSON.stringify(selectedResources.map(r => ({ id: r.id, quantity: r.quantity }))));

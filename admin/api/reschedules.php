@@ -10,7 +10,7 @@
 // An admin decision is always required — nothing is ever rescheduled automatically.
 require __DIR__ . '/_bootstrap.php';
 require_once __DIR__ . '/../../shared/scheduling.php';
-$admin = require_auth();
+$admin = require_osas(require_auth());   // OSAS only
 $pdo = db();
 
 if (!sched_tables_ready($pdo)) {

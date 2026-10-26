@@ -90,10 +90,12 @@ Change these before putting the system anywhere near production traffic.
 
 ## Majority voting (Approval Queue)
 
-There are 3 seeded admin accounts. Each gets one vote per reservation; a
-simple majority of *all* admin accounts decides (3 admins → 2 votes, 5 → 3,
-etc. — this is computed automatically, so adding more admins to the
-`admins` table doesn't require a code change). Once decided, voting locks.
+There are 3 seeded admin accounts and a fixed **approval sequence**:
+1. **Administration** (`admin`) and 2. **Academic Affairs** (`academic`) must both approve a new
+request first. 3. **OSAS** (`osas`, the super admin) only sees it after that and makes the final
+decision: approve (request becomes APPROVED) or decline with a reason.
+A decline by any of the three declines the request (reason required). Undo is
+allowed on your own decision, but Administration / Academic can't undo once OSAS has acted.
 Go to **Settings → Office** in the admin panel to relabel an account as
 "Vice Academic Affairs" / "Vice OSAS" / etc.
 

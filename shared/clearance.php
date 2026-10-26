@@ -14,6 +14,7 @@
 require_once __DIR__ . '/../admin/includes/pdf.php';
 require_once __DIR__ . '/signatories.php';
 require_once __DIR__ . '/events.php';
+require_once __DIR__ . '/esignatures.php';
 
 /** Loads everything the clearance needs, or null if it isn't issued yet. */
 function load_clearance(PDO $pdo, int $reservationId, ?int $studentId = null): ?array {
@@ -127,23 +128,35 @@ function render_clearance_pdf(PDO $pdo, array $c): void {
     $y = max($y + 6, $pdf->pageHeight - 250);
     $colW = ($W - 20) / 2;
     $signed = $fd($c['reviewed_at']);
-    $esig = function (float $x, float $yy, string $label, string $name, string $title, string $who) use ($pdf, $c, $colW, $INK, $GREEN, $BLUE, $signed) {
+    $esig = function (float $x, float $yy, string $label, string $name, string $title, string $who, ?array $img = null) use ($pdf, $c, $colW, $INK, $GREEN, $BLUE, $signed) {
         $pdf->textAt($x, $yy, $label, 7.5, 'B', $INK);
         $name = $name === '' ? ' ' : $name;
-        // signature mark
-        $pdf->textAt($x, $yy + 14, $name, 11, 'I', $BLUE, $colW, 'center');
+        // signature mark: the drawn e-signature if there is one, otherwise the typed name
+        if ($img) $pdf->drawImage($img, $x + 20, $yy + 8, $colW - 40, 22);
+        else      $pdf->textAt($x, $yy + 14, $name, 11, 'I', $BLUE, $colW, 'center');
         $pdf->textAt($x, $yy + 30, strtoupper($name), 8.5, 'B', $INK, $colW, 'center');
         $pdf->hline($x + 10, $yy + 41, $colW - 20, $INK, 0.6);
         $pdf->textAt($x, $yy + 44, $title, 6.8, '', $INK, $colW, 'center');
-        $pdf->textAt($x, $yy + 54, 'E-SIGNED ' . $signed . '  ·  Code ' . esign_code($c, $who), 6.3, 'B', $GREEN, $colW, 'center');
+        $pdf->textAt($x, $yy + 54, 'E-SIGNED ' . $signed, 6.3, 'B', $GREEN, $colW, 'center');
     };
     $reviewer = trim((string) ($c['reviewer_name'] ?? ''));
     $revTitle = !empty($c['reviewer_office']) && $c['reviewer_office'] !== 'Admin' ? 'Vice ' . $c['reviewer_office'] . ', OSAS' : 'OSAS Reviewer';
+
+    // Drawn e-signatures (admin_signatures / reservation_signatures). All null until migration_esignatures.sql is imported.
+    $imgReviewed = $imgApproved = $imgNoted = null;
+    try {
+        $rb = $pdo->prepare('SELECT reviewed_by FROM post_event_reports WHERE id = ?');
+        $rb->execute([(int) $c['report_id']]);
+        $imgReviewed = esig_admin_image($pdo, (int) $rb->fetchColumn() ?: null);
+        $imgApproved = esig_clearance_image($pdo, (int) $c['id'], 'approver1');
+        $imgNoted    = esig_clearance_image($pdo, (int) $c['id'], 'noted');
+    } catch (Throwable $e) { /* signatures are optional */ }
+
     $esig($L, $y, 'Prepared by:', (string) $c['prepared_by'], 'Student / Organization Representative', 'prepared');
-    $esig($L + $colW + 20, $y, 'Reviewed by:', $reviewer ?: 'OSAS', $revTitle, 'reviewed');
+    $esig($L + $colW + 20, $y, 'Reviewed by:', $reviewer ?: 'OSAS', $revTitle, 'reviewed', $imgReviewed);
     $y += 74;
-    $esig($L, $y, 'Approved by:', (string) $sig['approver1_name'], (string) $sig['approver1_title'], 'approved');
-    $esig($L + $colW + 20, $y, 'Noted by:', (string) $sig['noted_name'], (string) $sig['noted_title'], 'noted');
+    $esig($L, $y, 'Approved by:', (string) $sig['approver1_name'], (string) $sig['approver1_title'], 'approved', $imgApproved);
+    $esig($L + $colW + 20, $y, 'Noted by:', (string) $sig['noted_name'], (string) $sig['noted_title'], 'noted', $imgNoted);
     $y += 74;
 
     $pdf->hline($L, $y, $W, '#cccccc', 0.5);

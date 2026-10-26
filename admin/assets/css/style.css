@@ -499,14 +499,14 @@ tbody tr[hidden] { display: none; }
 .resp-table th { white-space: normal; padding: 12px 8px; line-height: 1.3; vertical-align: bottom; }
 .resp-table td { padding: 12px 8px; vertical-align: top; line-height: 1.45; overflow-wrap: anywhere; }
 .resp-table td:first-child { white-space: normal; }
-.queue-table th:nth-child(1) { width: 21%; }
-.queue-table th:nth-child(2) { width: 11%; }
-.queue-table th:nth-child(3) { width: 14%; }
-.queue-table th:nth-child(4) { width: 14%; }
-.queue-table th:nth-child(5) { width: 9%; }
+.queue-table th:nth-child(1) { width: 17%; }
+.queue-table th:nth-child(2) { width: 9%; }
+.queue-table th:nth-child(3) { width: 12%; }
+.queue-table th:nth-child(4) { width: 12%; }
+.queue-table th:nth-child(5) { width: 8%; }
 .queue-table th:nth-child(6) { width: 9%; }
-.queue-table th:nth-child(7) { width: 11%; }
-.queue-table th:nth-child(8) { width: 11%; }
+.queue-table th:nth-child(7) { width: 19%; }
+.queue-table th:nth-child(8) { width: 14%; }
 .resp-table .cell-wrap { min-width: 0; max-width: none; }
 .resp-table .q-name { display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 13.5px; line-height: 1.35; }
 .resp-table .q-org { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -555,3 +555,18 @@ tbody tr[hidden] { display: none; }
 .wait-table th:nth-child(1) { width: 20%; } .wait-table th:nth-child(2) { width: 32%; } .wait-table th:nth-child(3) { width: 20%; }
 .wait-table th:nth-child(4) { width: 16%; } .wait-table th:nth-child(5) { width: 12%; }
 .rep-table td .badge { margin-top: 2px; }
+/* ---- approval sequence (Administration or Academic -> OSAS) ---- */
+.flow { display: grid; gap: 4px; min-width: 0; cursor: help; }
+.flow__row { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 8px; background: var(--line-soft); color: var(--muted, #6b7280); min-width: 0; }
+.flow__ic { flex: 0 0 18px; height: 18px; border-radius: 50%; background: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; line-height: 1; }
+.flow__txt { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.flow__txt b { font-size: 12px; font-weight: 700; overflow-wrap: normal; word-break: normal; }
+.flow__txt small { font-size: 10.5px; font-weight: 600; }
+.flow__arrow { text-align: center; font-size: 10px; color: var(--muted, #6b7280); line-height: 1; }
+.flow__row--approved { background: #e3f4e8; color: var(--approved-fg, #1f6b3a); }
+.flow__row--declined { background: #fbe4e1; color: var(--declined-fg, #a0322a); }
+.flow__row--waiting, .flow__row--skipped { opacity: .65; }
+.resp-table td[data-label="Approval Sequence"] .btn { margin-top: 6px; }
+
+.q-pos { display: inline-block; margin-bottom: 4px; padding: 1px 8px; border-radius: 99px; background: #e3f4e8; color: var(--approved-fg, #1f6b3a); font-size: 10.5px; font-weight: 700; }
+.resp-table .q-sub { font-weight: 600; color: var(--ink, #1f2937); }
