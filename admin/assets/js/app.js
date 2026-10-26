@@ -57,6 +57,16 @@ $('#lightbox').addEventListener('click', (e) => {
   if (e.target.id !== 'lightboxImg') closeLightbox();
 });
 
+/* ---------- skeleton loading placeholders ---------- */
+const skelRows = (n = 5) => '<div class="skel-row"><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>'.repeat(n);
+/** Page-shaped placeholder shown while a page's data is being fetched. */
+const skeletonPage = (name) => `<div role="status" aria-busy="true" aria-label="Loading">
+  ${name === 'dashboard' ? `<div class="skel-stats">${'<div class="skel skel-stat"></div>'.repeat(4)}</div>` : ''}
+  <div class="card skel-table">${skelRows(name === 'dashboard' ? 4 : 6)}</div></div>`;
+/** Placeholder for text-style modals (forms, reports). */
+const skeletonLines = (n = 6) => `<div role="status" aria-busy="true" aria-label="Loading"><div class="skel skel-line skel-line--title"></div>${
+  Array.from({ length: n }, (_, i) => `<div class="skel skel-line ${i % 3 === 2 ? 'skel-line--w60' : i % 3 === 1 ? 'skel-line--w80' : ''}"></div>`).join('')}</div>`;
+
 /* ---------- file helpers ---------- */
 const isImageMime = (m) => String(m || '').startsWith('image/');
 const fileGlyph = (mime) => {
@@ -411,15 +421,18 @@ const pages = {
   /* ===== All Reservation ===== */
   reservations: {
     title: 'All Reservation',
+    filter: 'all',
     async render() {
-      const { rows } = await api.get('reservations.php');
+      const { rows } = await api.get(`reservations.php${this.filter === 'all' ? '' : '?status=' + this.filter}`);
       const needsReview = rows.filter((r) => r.report_review_status === 'pending').length;
       return `
         ${needsReview ? `<div class="notice">
           <span class="notice__dot">!</span>
           <span><strong>${needsReview} post-event report${needsReview === 1 ? '' : 's'}</strong> submitted by students are waiting on your review. Look for the amber <span class="pe-inline">!</span> beside the Done status.</span>
         </div>` : ''}
-        <div class="card"><div class="table-wrap"><table class="resp-table all-table">
+        <div class="card">
+          <div class="card__head">${tabs(['pending', 'approved', 'declined', 'completed', 'cancelled', 'all'], this.filter)}</div>
+          <div class="table-wrap"><table class="resp-table all-table">
           <thead><tr><th>Request</th><th>Nature of Activity</th><th>Venue &amp; Schedule</th><th>Requested By</th><th>Form</th><th>Status</th><th>Action</th></tr></thead>
           <tbody>${rows.length ? rows.map((r) => `
             <tr>
@@ -446,6 +459,7 @@ const pages = {
           </tbody></table></div></div>`;
     },
     mount(root) {
+      bindTabs(root, this);
       bindRowActions(root);
       root.addEventListener('click', (e) => {
         const b = e.target.closest('[data-act]');
@@ -756,7 +770,7 @@ const pages = {
               <td class="q-actions" data-label="Action"><div class="actions">
                 <button class="btn btn--sm ${r.review_status === 'pending' ? 'btn--primary' : 'btn--outline'}" data-report="${r.id}">${r.review_status === 'pending' ? 'Review' : 'View'}</button>
                 <a class="btn btn--sm btn--ghost" href="api/report_pdf.php?id=${r.id}" title="Download this report as PDF">PDF</a>
-                ${r.review_status === 'approved' ? `<a class="btn btn--sm btn--ghost" href="api/clearance_pdf.php?report_id=${r.id}" title="Download the activity clearance">Clearance</a>` : ''}
+                ${r.review_status === 'approved' && session.can_clearance ? `<a class="btn btn--sm btn--ghost" href="api/clearance_pdf.php?report_id=${r.id}" title="Download the activity clearance">Clearance</a>` : ''}
               </div></td>
             </tr>`).join('') : emptyRow(7, 'No post-event reports have been submitted for this period yet.')}
           </tbody></table></div></div>`;
@@ -943,7 +957,7 @@ function filesButton(r) {
 }
 
 async function openRequirements(reservationId) {
-  openModal('Permission to Conduct Activity', '<p class="muted">Loading form…</p>', null, 'wide');
+  openModal('Permission to Conduct Activity', skeletonLines(8), null, 'wide');
   try {
     const { reservation, resources, files, signatories } = await api.get(`requirements.php?reservation_id=${reservationId}`);
     const images = files.filter((f) => f.kind === 'image');
@@ -1026,7 +1040,7 @@ function statusCell(r) {
  * PDF link, and — only while it's awaiting review — Approve / Request
  * Revision actions for the Vice Admin looking at it. */
 async function openReportView(reportId) {
-  openModal('Post-Event Report', '<p class="muted">Loading report…</p>', null, 'wide');
+  openModal('Post-Event Report', skeletonLines(8), null, 'wide');
   let r;
   try {
     r = await api.get(`post_events.php?id=${reportId}`);
@@ -1093,7 +1107,7 @@ async function openReportView(reportId) {
     <div class="form-actions">
       <button class="btn btn--ghost" data-close>Close</button>
       <a class="btn btn--primary" href="api/report_pdf.php?id=${r.id}">Download PDF</a>
-      ${r.review_status === 'approved' ? `<a class="btn btn--primary" href="api/clearance_pdf.php?report_id=${r.id}">Download Clearance</a>` : ''}
+      ${r.review_status === 'approved' && session.can_clearance ? `<a class="btn btn--primary" href="api/clearance_pdf.php?report_id=${r.id}">Download Clearance</a>` : ''}
     </div>`, (root) => {
     $$('[data-view]', root).forEach((fig) => {
       fig.onclick = () => openLightbox(fig.dataset.view, fig.dataset.caption);
@@ -1139,7 +1153,116 @@ function bindRowActions(root) {
     if (files) return openRequirements(files.dataset.files);
     const rep = e.target.closest('[data-report]');
     if (rep) return openReportView(rep.dataset.report);
+    const att = e.target.closest('[data-att]');
+    if (att) return openAttendance(att.dataset.att);
   });
+}
+
+/* ---------- QR attendance (modal on the All Reservation page) ---------- */
+const ATT_BASE_KEY = 'osas_att_base';
+const attIsLocal = (u) => /^(https?:\/\/)?(localhost|127\.\d+\.\d+\.\d+|\[?::1\]?)([:\/]|$)/i.test(String(u).trim());
+const attStamp = (s) => s ? new Date(s.replace(' ', 'T')).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+const attStatusLabel = (code) => ({ open: ['open', 'Open'], scheduled: ['open', 'Scheduled'], too_early: ['', 'Not open yet'], ended: ['closed', 'Ended'] }[code] || ['closed', 'Closed']);
+const attGetBase = (fallback) => { try { return localStorage.getItem(ATT_BASE_KEY) || fallback; } catch { return fallback; } };
+const attSetBase = (v) => { try { localStorage.setItem(ATT_BASE_KEY, v); } catch { /* storage blocked: the field still works for this session */ } };
+
+async function openAttendance(id) {
+  openModal('QR Attendance', `<div class="att-grid" role="status" aria-busy="true" aria-label="Loading"><div class="skel skel-qr"></div><div>${skeletonLines(4)}</div></div>`, null, 'wide');
+  try { paintAttendance(await api.get(`attendance.php?reservation_id=${encodeURIComponent(id)}`)); }
+  catch (e) { closeModal(); toast(e.message, true); }
+}
+
+async function attAct(id, action) {
+  if (action === 'regenerate') {
+    const ok = await confirmBox('Issue a new QR code? Any QR code already shown or printed will stop working. Existing attendance records are kept.', 'Issue new QR');
+    if (!ok) return openAttendance(id);
+  }
+  try {
+    const res = await api.post(`attendance.php?action=${action}`, { reservation_id: id });
+    toast(res.message || 'Done');
+    paintAttendance(res.data);
+  } catch (e) { toast(e.message, true); openAttendance(id); }
+}
+
+function paintAttendance(d) {
+  const r = d.reservation, s = d.session;
+  const head = `<div class="att-head"><strong>${esc(r.event_name)}</strong>
+    <div class="sub muted">${esc(r.ref_no)} · ${esc(r.venue_name)}</div>
+    <div class="sub muted">${esc(fmtDate(r.event_date))}, ${fmtTime(r.start_time)} – ${fmtTime(r.end_time)}</div></div>`;
+
+  let top;
+  if (!s) {
+    top = d.eligible
+      ? `<p>No attendance QR yet. Generate one so students can time in from their own phones.</p>
+         <div class="att-actions"><button class="btn btn--primary" data-attact="generate">Generate QR code</button></div>`
+      : `<p class="muted">A QR code can only be generated for an approved reservation (this one is ${esc(r.status)}).</p>`;
+  } else {
+    const [cls, label] = attStatusLabel(s.state.code);
+    const canOpen = d.eligible && ['closed', 'too_early'].includes(s.state.code);
+    const canClose = d.eligible && ['open', 'scheduled'].includes(s.state.code);
+    top = `<div class="att-grid">
+      <div class="att-qr" id="attQr"></div>
+      <div>
+        <div><span class="att-status ${cls ? 'att-status--' + cls : ''}">${esc(label)}</span></div>
+        <p class="sub muted" style="margin:6px 0 0">${esc(s.state.message)}</p>
+        <p class="sub muted" style="margin:2px 0 0">Check-in window: ${esc(attStamp(s.state.opens_at))} – ${esc(attStamp(s.state.closes_at))}</p>
+        <div class="att-field">
+          <label for="attBase">Address students' phones will open</label>
+          <input id="attBase" type="text" value="${esc(attGetBase(d.public_base))}" spellcheck="false">
+        </div>
+        <div class="att-warn" id="attWarn" hidden>This address only works on this computer. Use your computer's network address instead, for example <b>http://192.168.1.10/osas-system/public</b> (run <code>ipconfig</code> and use the IPv4 address). The phone must be on the same Wi-Fi.</div>
+        <div class="att-field">
+          <label for="attLink">Attendance link</label>
+          <input id="attLink" type="text" readonly>
+        </div>
+        <div class="att-actions">
+          ${canOpen ? '<button class="btn btn--primary" data-attact="open">Open attendance</button>' : ''}
+          ${canClose ? '<button class="btn btn--danger" data-attact="close">Close attendance</button>' : ''}
+          <button class="btn btn--outline" id="attCopy">Copy link</button>
+          ${d.eligible ? '<button class="btn btn--ghost" data-attact="regenerate">New QR code</button>' : ''}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  const summary = s ? `<div class="att-summary">
+      <div class="att-total">Total students present: ${d.total}</div>
+      <div class="att-list"><table>
+        <thead><tr><th>#</th><th>Student ID</th><th>Full name</th><th>Course</th><th>Time-in</th></tr></thead>
+        <tbody>${d.records.length ? d.records.map((x, i) => `<tr><td>${i + 1}</td><td>${esc(x.student_id)}</td><td>${esc(x.full_name)}</td><td>${esc(x.course)}</td><td>${esc(attStamp(x.time_in))}</td></tr>`).join('') : emptyRow(5, 'No one has timed in yet.')}</tbody>
+      </table></div>
+      <div class="att-actions">
+        <button class="btn btn--sm btn--outline" id="attRefresh">Refresh</button>
+        <a class="btn btn--sm btn--outline" href="api/attendance.php?reservation_id=${r.id}&export=csv">Export CSV</a>
+      </div>
+    </div>` : '';
+
+  openModal('QR Attendance', head + top + summary, (root) => {
+    $$('[data-attact]', root).forEach((b) => b.addEventListener('click', () => attAct(r.id, b.dataset.attact)));
+    $('#attRefresh', root)?.addEventListener('click', () => openAttendance(r.id));
+    if (!s) return;
+
+    const baseEl = $('#attBase', root), linkEl = $('#attLink', root), qrEl = $('#attQr', root), warnEl = $('#attWarn', root);
+    const draw = () => {
+      const base = (baseEl.value.trim() || d.public_base).replace(/\/+$/, '');
+      const url = `${base}/attendance.php?t=${encodeURIComponent(s.token)}`;
+      linkEl.value = url;
+      warnEl.hidden = !attIsLocal(base);
+      try {
+        const q = qrcode(0, 'M');
+        q.addData(url);
+        q.make();
+        qrEl.innerHTML = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+      } catch { qrEl.textContent = 'Could not draw the QR code.'; }
+    };
+    baseEl.addEventListener('input', () => { attSetBase(baseEl.value.trim()); draw(); });
+    $('#attCopy', root).addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(linkEl.value); }
+      catch { linkEl.select(); document.execCommand('copy'); }
+      toast('Link copied');
+    });
+    draw();
+  }, 'wide');
 }
 
 /** Date cell; if the reservation was rescheduled, also shows where it started. */
@@ -1235,18 +1358,22 @@ function voteTally(r, needed, declineNeeded) {
  * the action column reflects wherever that review is up to.
  */
 function reservationAction(r) {
+  // QR attendance: approved events can take it, finished events can show the summary.
+  const att = (r.status === 'approved' || r.status === 'completed')
+    ? `<button class="btn btn--sm btn--outline" data-att="${r.id}" title="QR attendance for this event">Attendance</button>`
+    : '';
   if (r.status === 'approved') {
-    return `<button class="btn btn--sm btn--outline" data-act="complete" data-id="${r.id}" title="End this event early and mark it done now">Mark done</button>`;
+    return att + `<button class="btn btn--sm btn--outline" data-act="complete" data-id="${r.id}" title="End this event early and mark it done now">Mark done</button>`;
   }
   if (r.status === 'completed') {
-    if (!r.report_id) return '<span class="muted">Awaiting student submission</span>';
+    if (!r.report_id) return att + '<span class="muted">Awaiting student submission</span>';
     if (r.report_review_status === 'pending') {
-      return `<button class="btn btn--sm btn--primary" data-report="${r.report_id}">Review report</button>`;
+      return att + `<button class="btn btn--sm btn--primary" data-report="${r.report_id}">Review report</button>`;
     }
     if (r.report_review_status === 'needs_revision') {
-      return `<button class="btn btn--sm btn--outline" data-report="${r.report_id}">View (sent back)</button>`;
+      return att + `<button class="btn btn--sm btn--outline" data-report="${r.report_id}">View (sent back)</button>`;
     }
-    return `<button class="btn btn--sm btn--outline" data-report="${r.report_id}">View report</button>`;
+    return att + `<button class="btn btn--sm btn--outline" data-report="${r.report_id}">View report</button>`;
   }
   return '<span class="muted">—</span>';
 }
@@ -1417,8 +1544,11 @@ async function render() {
   $('#pageTitle').textContent = typeof page.title === 'function' ? page.title() : page.title;
   $('#sidebar').classList.remove('open');
 
+  // Show the skeleton only if the page is still loading after a beat, so fast pages don't flicker.
+  const skelTimer = setTimeout(() => { if (token === renderToken) $('#app').innerHTML = skeletonPage(name); }, 120);
   try {
     const html = await page.render();
+    clearTimeout(skelTimer);
     if (token !== renderToken) return; // user navigated away meanwhile
     // Replace node so old event listeners are dropped
     const current = $('#app');
@@ -1428,6 +1558,7 @@ async function render() {
     page.mount?.(fresh);
     enhanceTables(fresh, name, page);
   } catch (e) {
+    clearTimeout(skelTimer);
     $('#app').innerHTML = `<div class="card" style="padding:24px"><strong>Could not load this page.</strong><p class="muted">${esc(e.message)}</p></div>`;
   }
 }

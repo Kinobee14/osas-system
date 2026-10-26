@@ -974,6 +974,12 @@ table.cal td.past-day{color:#c9c2ac;background:transparent;}
 .sch-old{font-size:.74rem;color:var(--ink-soft);margin-top:3px;}
 .sch-lbl{display:inline-block;font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;background:#eceae2;border-radius:4px;padding:1px 5px;margin-right:4px;color:#5b5b50;}
 @media(max-width:560px){.up-card{flex-direction:column;gap:8px;}.up-when{width:auto;border-right:none;padding-right:0;text-align:left;display:flex;gap:8px;align-items:baseline;}}
+
+.skel{position:relative;overflow:hidden;background:#ece8d8;border-radius:6px;height:12px;margin:10px 0;}
+.skel::after{content:"";position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(255,255,255,.65),transparent);animation:skel-shimmer 1.2s ease-in-out infinite;}
+.skel--title{height:18px;width:55%;} .skel--w80{width:80%;} .skel--w60{width:60%;}
+@keyframes skel-shimmer{to{transform:translateX(100%);}}
+@media (prefers-reduced-motion:reduce){.skel::after{animation:none;}}
 </style>
 </head>
 <body>
@@ -1529,7 +1535,7 @@ async function openPostEventForm(index){
   pePhotos.forEach(p => URL.revokeObjectURL(p.preview));
   pePhotos = [];
 
-  openStuModal(`<p class="empty-note">Loading event details…</p>`);
+  openStuModal(`<div role="status" aria-busy="true" aria-label="Loading"><div class="skel skel--title"></div><div class="skel"></div><div class="skel skel--w80"></div><div class="skel"></div><div class="skel skel--w60"></div><div class="skel skel--w80"></div></div>`);
 
   let data;
   try{

@@ -1,0 +1,22 @@
+/* QR attendance modal (admin). Loaded after style.css. */
+.att-head { margin-bottom: 12px; }
+.att-head .sub { margin-top: 2px; }
+.att-grid { display: grid; grid-template-columns: 240px 1fr; gap: 18px; align-items: start; }
+.att-qr { background: #fff; border: 1px solid var(--line, #e2ddcc); border-radius: 12px; padding: 10px; }
+.att-qr svg { width: 100%; height: auto; display: block; }
+.att-status { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #eee; color: #555; }
+.att-status--open { background: #dff5e6; color: #14693a; }
+.att-status--closed { background: #fdecea; color: #b3261e; }
+.att-field { margin: 10px 0; }
+.att-field label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+.att-field input { width: 100%; padding: 8px 10px; border: 1px solid var(--line, #e2ddcc); border-radius: 8px; font-size: 13px; }
+.att-warn { background: #fff4e0; color: #8a5300; border-radius: 8px; padding: 8px 10px; font-size: 12px; margin: 8px 0; }
+.att-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.att-summary { margin-top: 18px; }
+.att-total { font-weight: 700; margin-bottom: 6px; }
+.att-list { max-height: 260px; overflow: auto; border: 1px solid var(--line, #e2ddcc); border-radius: 8px; }
+.att-list table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.att-list th, .att-list td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line, #e2ddcc); }
+.att-list th { position: sticky; top: 0; background: #f7f5ec; }
+@media (max-width: 640px) { .att-grid { grid-template-columns: 1fr; } .att-qr { max-width: 260px; margin: 0 auto; } }
+@media print { .att-actions, .att-field, .att-warn { display: none; } }

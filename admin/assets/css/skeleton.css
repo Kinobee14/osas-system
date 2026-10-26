@@ -1,0 +1,23 @@
+/* Skeleton loading placeholders (admin). Loaded after style.css. */
+.skel { position: relative; overflow: hidden; background: #ece8d8; border-radius: 6px; }
+.skel::after {
+  content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .65), transparent);
+  animation: skel-shimmer 1.2s ease-in-out infinite;
+}
+@keyframes skel-shimmer { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .skel::after { animation: none; } }
+
+.skel-line { height: 12px; margin: 10px 0; }
+.skel-line--title { height: 18px; width: 55%; }
+.skel-line--w80 { width: 80%; }
+.skel-line--w60 { width: 60%; }
+.skel-line--w40 { width: 40%; }
+.skel-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px; margin-bottom: 16px; }
+.skel-stat { height: 86px; border-radius: 12px; }
+.skel-table { padding: 8px 0; }
+.skel-row { display: grid; grid-template-columns: 2fr 1.5fr 1.5fr 1fr 1fr; gap: 16px; padding: 14px 18px; border-bottom: 1px solid var(--line, #e2ddcc); }
+.skel-row:last-child { border-bottom: 0; }
+.skel-row .skel { height: 14px; }
+.skel-qr { height: 220px; border-radius: 12px; }
+@media (max-width: 640px) { .skel-row { grid-template-columns: 1fr 1fr; } }
